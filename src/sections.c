@@ -2,6 +2,8 @@
 #include "syscalls.h"
 #include "out.h"
 
+#define ALIGN_UP(x, align) (((x) + ((align)-1)) & ~((align)-1))
+
 _Success_(return)
 static BOOL
 IsPossiblyEncrypted(_In_ PIMAGE_SECTION_HEADER SectionHeader);
@@ -23,7 +25,9 @@ ResolveSections(_In_ PDUMPER Dumper, _In_ PBYTE *OriginalImage)
     PIMAGE_OPTIONAL_HEADER OptionalHeader;
     PIMAGE_SECTION_HEADER SectionHeader;
     PBYTE ImageBase;
-    DWORD i;
+    DWORD i, ImagePtr;
+    NTSTATUS Status;
+    PVOID BaseAddress;
 
     //
     // Ensure that the original image is not NULL.
@@ -44,13 +48,24 @@ ResolveSections(_In_ PDUMPER Dumper, _In_ PBYTE *OriginalImage)
     DosHeader = (PIMAGE_DOS_HEADER)ImageBase;
     NtHeaders = RVA2VA(PIMAGE_NT_HEADERS, ImageBase, DosHeader->e_lfanew);
     OptionalHeader = &NtHeaders->OptionalHeader;
+    ImagePtr = OptionalHeader->SizeOfHeaders;
     SectionHeader = IMAGE_FIRST_SECTION(NtHeaders);
 
     //
     // Loop through all of the sections.
     //
-    for (i = 0; i < NtHeaders->FileHeader.NumberOfSections; i++)
+    for (i = 0; i < NtHeaders->FileHeader.NumberOfSections; i++, SectionHeader++)
     {
+        //
+        // Update the virtual size of the section. We want to align it to the page size.
+        //
+        SectionHeader->Misc.VirtualSize = ALIGN_UP(SectionHeader->Misc.VirtualSize, PAGE_SIZE);
+
+        //
+        // Calculate the base address of the section.
+        //
+        BaseAddress = RVA2VA(PVOID, OptionalHeader->ImageBase, SectionHeader->VirtualAddress);
+
         //
         // If the section is possibly encrypted, then we will decrypt it.
         //
@@ -61,8 +76,26 @@ ResolveSections(_In_ PDUMPER Dumper, _In_ PBYTE *OriginalImage)
                 return FALSE;
             }
         }
+        else
+        {
+            //
+            // If the section is not encrypted, then we will simply read it.
+            //
+            Status = NtReadVirtualMemory(
+                Dumper->Process,
+                BaseAddress,
+                ImageBase + SectionHeader->PointerToRawData,
+                SectionHeader->SizeOfRawData,
+                NULL);
 
-        SectionHeader++;
+            if (!NT_SUCCESS(Status))
+            {
+                error("Failed to read memory region at 0x%08X (0x%08X)", SectionHeader->VirtualAddress, Status);
+                break;
+            }
+        }
+
+        info("Read section %s at 0x%p", SectionHeader->Name, BaseAddress);
     }
 
     return TRUE;
@@ -120,7 +153,7 @@ DecryptSection(_In_ PDUMPER Dumper, _In_ PIMAGE_SECTION_HEADER SectionHeader, _I
     PageRva = 0;
 
 DecryptionRoutine:
-    
+
     //
     // Now we will iterate over all pages in the provided section and attempt to decrypt them.
     //
@@ -152,6 +185,10 @@ DecryptionRoutine:
         //
         if (MemoryInfo.Protect & PAGE_NOACCESS)
         {
+            //
+            // Fill it with nop instructions.
+            //
+            memset(BufferPtr, 0x90, PAGE_SIZE);
             continue;
         }
 
@@ -174,12 +211,15 @@ DecryptionRoutine:
         PagesList[PageIndex] = TRUE;
         PagesDecrypted++;
 
-        info(
-            "Decrypted page at 0x%p (%lu/%lu = %.2f%%)",
-            BaseAddress,
-            PagesDecrypted,
-            PagesToDecrypt,
-            (FLOAT)PagesDecrypted / PagesToDecrypt * 100.0f);
+        if (Dumper->DecryptionFactor)
+        {
+            info(
+                "Decrypted page at 0x%p (%lu/%lu = %.2f%%)",
+                BaseAddress,
+                PagesDecrypted,
+                PagesToDecrypt,
+                (FLOAT)PagesDecrypted / PagesToDecrypt * 100.0f);
+        }
     }
 
     //

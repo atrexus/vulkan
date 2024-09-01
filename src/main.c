@@ -56,9 +56,9 @@ int _cdecl main()
         return EXIT_FAILURE;
     }
    
-    Name = NULL;
+    Name = L"RobloxPlayerBeta.exe";
     DebugMode = FALSE;
-    DecryptFactor = 0.60f;
+    DecryptFactor = 0.00f;
     OutputPath = L".";
 
     for (int i = 1; i < nArgs; i++)

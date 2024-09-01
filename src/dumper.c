@@ -16,7 +16,7 @@ WriteImageToDisk(_In_ PDUMPER Dumper, _In_ PBYTE Buffer, _In_ SIZE_T Size);
 
 _Success_(return)
 static BOOL
-ReadEntireImage(_In_ PDUMPER Dumper, _Out_ PBYTE *Buffer);
+BuildInitialImage(_In_ PDUMPER Dumper, _Out_ PBYTE *Buffer);
 
 // =====================================================================================================================
 // Public functions
@@ -96,7 +96,7 @@ DumperDumpToDisk(_In_ PDUMPER Dumper)
     //
     // Read the entire image of the target process.
     //
-    if (!ReadEntireImage(Dumper, &Buffer))
+    if (!BuildInitialImage(Dumper, &Buffer))
     {
         goto Exit;
     }
@@ -277,12 +277,11 @@ WriteImageToDisk(_In_ PDUMPER Dumper, _In_ PBYTE Buffer, _In_ SIZE_T Size)
 
 _Success_(return)
 static BOOL
-ReadEntireImage(_In_ PDUMPER Dumper, _Out_ PBYTE *Buffer)
+BuildInitialImage(_In_ PDUMPER Dumper, _Out_ PBYTE *Buffer)
 {
     PVOID BaseAddress;
     MEMORY_BASIC_INFORMATION MemoryInfo;
     NTSTATUS Status;
-    DWORD PageRva;
 
     //
     // Allocate a buffer to store the image.
@@ -295,60 +294,36 @@ ReadEntireImage(_In_ PDUMPER Dumper, _Out_ PBYTE *Buffer)
         return FALSE;
     }
 
-    PageRva = 0;
+    //
+    // Fill the buffer with zeros.
+    //
+    ZeroMemory(*Buffer, Dumper->ModuleInfo.SizeOfImage);
 
     //
-    // Now we will query the entire image of the main module. We will try to read each region and save it to the buffer.
-    // Once we have done that, we will resolve sections and write them to disk.
+    // The initial image will only contain the PE headers. This is the first memory region of the target process.
     //
-    while (PageRva < Dumper->ModuleInfo.SizeOfImage)
+    BaseAddress = Dumper->ModuleInfo.lpBaseOfDll;
+
+    //
+    // Query the first memory region of the target process.
+    //
+    if (!VirtualQueryEx(Dumper->Process, BaseAddress, &MemoryInfo, sizeof(MemoryInfo)))
     {
-        BaseAddress = RVA2VA(PVOID, Dumper->ModuleInfo.lpBaseOfDll, PageRva);
-
-        //
-        // Query the memory information of the current region.
-        //
-        if (!VirtualQueryEx(Dumper->Process, BaseAddress, &MemoryInfo, sizeof(MemoryInfo)))
-            break;
-
-        //
-        // If this page is not readable, then skip it. We will handle it later.
-        //
-        if (MemoryInfo.Protect & PAGE_NOACCESS)
-        {
-            //
-            // Fill the buffer with empty instructions.
-            //
-            memset((*Buffer) + PageRva, 0x00, MemoryInfo.RegionSize);
-        }
-        else
-        {
-            //
-            // Read the memory region.
-            //
-            Status =
-                NtReadVirtualMemory(Dumper->Process, BaseAddress, (*Buffer) + PageRva, MemoryInfo.RegionSize, NULL);
-
-            if (!NT_SUCCESS(Status))
-            {
-                error("Failed to read memory region at 0x%p (0x%08X)", BaseAddress, Status);
-                break;
-            }
-        }
-
-        PageRva += MemoryInfo.RegionSize;
-    }
-
-    //
-    // If we failed to read the entire image, then free the buffer and return FALSE.
-    //
-    if (PageRva != Dumper->ModuleInfo.SizeOfImage)
-    {
-        error("Failed to read the entire image of the target process");
-        free(*Buffer);
+        error("Failed to query memory region at 0x%p", BaseAddress);
         return FALSE;
     }
 
-    info("Constructed initial image of target process (0x%X)", PageRva);
+    //
+    // Read the first memory region of the target process and store it in the buffer.
+    //
+    Status = NtReadVirtualMemory(Dumper->Process, BaseAddress, *Buffer, MemoryInfo.RegionSize, NULL);
+
+    if (!NT_SUCCESS(Status))
+    {
+        error("Failed to read memory region at 0x%p (0x%08X)", BaseAddress, Status);
+        return FALSE;
+    }
+
+    info("Built initial image of target process (0x%p)", BaseAddress);
     return TRUE;
 }

@@ -319,14 +319,15 @@ ReadEntireImage(_In_ PDUMPER Dumper, _Out_ PBYTE *Buffer)
             //
             // Fill the buffer with empty instructions.
             //
-            memset((*Buffer) + PageRva, 0x00, PAGE_SIZE);
+            memset((*Buffer) + PageRva, 0x00, MemoryInfo.RegionSize);
         }
         else
         {
             //
             // Read the memory region.
             //
-            Status = NtReadVirtualMemory(Dumper->Process, BaseAddress, (*Buffer) + PageRva, PAGE_SIZE, NULL);
+            Status =
+                NtReadVirtualMemory(Dumper->Process, BaseAddress, (*Buffer) + PageRva, MemoryInfo.RegionSize, NULL);
 
             if (!NT_SUCCESS(Status))
             {

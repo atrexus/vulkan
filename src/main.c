@@ -55,8 +55,8 @@ int _cdecl main()
         error("CommandLineToArgvW failed with error %lu", GetLastError());
         return EXIT_FAILURE;
     }
-    
-    Name = L"RobloxPlayerBeta.exe";
+   
+    Name = NULL;
     DebugMode = FALSE;
     DecryptFactor = 0.60f;
     OutputPath = L".";

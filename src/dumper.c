@@ -284,8 +284,6 @@ ReadEntireImage(_In_ PDUMPER Dumper, _Out_ PBYTE *Buffer)
     NTSTATUS Status;
     DWORD PageRva;
 
-    BaseAddress = Dumper->ModuleInfo.lpBaseOfDll;
-
     //
     // Allocate a buffer to store the image.
     //
@@ -297,11 +295,13 @@ ReadEntireImage(_In_ PDUMPER Dumper, _Out_ PBYTE *Buffer)
         return FALSE;
     }
 
+    PageRva = 0;
+
     //
     // Now we will query the entire image of the main module. We will try to read each region and save it to the buffer.
     // Once we have done that, we will resolve sections and write them to disk.
     //
-    for (PageRva = 0; PageRva < Dumper->ModuleInfo.SizeOfImage; PageRva += PAGE_SIZE)
+    while (PageRva < Dumper->ModuleInfo.SizeOfImage)
     {
         BaseAddress = RVA2VA(PVOID, Dumper->ModuleInfo.lpBaseOfDll, PageRva);
 
@@ -317,22 +317,25 @@ ReadEntireImage(_In_ PDUMPER Dumper, _Out_ PBYTE *Buffer)
         if (MemoryInfo.Protect & PAGE_NOACCESS)
         {
             //
-            // Fill the buffer with NOP instructions.
+            // Fill the buffer with empty instructions.
             //
-            memset((*Buffer) + PageRva, 0x90, PAGE_SIZE);
-            continue;
+            memset((*Buffer) + PageRva, 0x00, PAGE_SIZE);
         }
-
-        //
-        // Read the memory region.
-        //
-        Status = NtReadVirtualMemory(Dumper->Process, BaseAddress, (*Buffer) + PageRva, PAGE_SIZE, NULL);
-
-        if (!NT_SUCCESS(Status))
+        else
         {
-            error("Failed to read memory region at 0x%p (0x%08X)", BaseAddress, Status);
-            break;
+            //
+            // Read the memory region.
+            //
+            Status = NtReadVirtualMemory(Dumper->Process, BaseAddress, (*Buffer) + PageRva, PAGE_SIZE, NULL);
+
+            if (!NT_SUCCESS(Status))
+            {
+                error("Failed to read memory region at 0x%p (0x%08X)", BaseAddress, Status);
+                break;
+            }
         }
+
+        PageRva += MemoryInfo.RegionSize;
     }
 
     //

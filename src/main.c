@@ -56,7 +56,7 @@ int _cdecl main()
         return EXIT_FAILURE;
     }
    
-    Name = L"RobloxPlayerBeta.exe";
+    Name = NULL;
     DebugMode = FALSE;
     DecryptFactor = 0.00f;
     OutputPath = L".";
@@ -150,7 +150,7 @@ Usage()
     fprintf(
         stdout,
         "  -o <path>            The output directory where the dump will be saved (default: \".\").\n");
-    fprintf(stdout, "  --decrypt <factor>   Fraction of no access pages to have decrypted before dumping (Default: 0.6).\n");
+    fprintf(stdout, "  --decrypt <factor>   Fraction of no access pages to have decrypted before dumping (Default: 0.0).\n");
     fprintf(stdout, "Flags:\n");
     fprintf(stdout, "  -D                   Enable debug mode (Default: false).\n");
 }

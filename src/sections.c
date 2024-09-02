@@ -62,6 +62,15 @@ ResolveSections(_In_ PDUMPER Dumper, _In_ PBYTE *OriginalImage)
         SectionHeader->Misc.VirtualSize = ALIGN_UP(SectionHeader->Misc.VirtualSize, PAGE_SIZE);
 
         //
+        // We wan't to skip the vmp0 section as it prvents our dump from being loaded in IDA.
+        //
+        if (lstrcmpA((PCHAR)SectionHeader->Name, ".vmp0") == 0)
+        {
+            info("Skipping section %s", SectionHeader->Name);
+            continue;
+        }
+
+        //
         // Calculate the base address of the section.
         //
         BaseAddress = RVA2VA(PVOID, OptionalHeader->ImageBase, SectionHeader->VirtualAddress);
@@ -71,7 +80,7 @@ ResolveSections(_In_ PDUMPER Dumper, _In_ PBYTE *OriginalImage)
         //
         if (IsPossiblyEncrypted(SectionHeader))
         {
-            if (!DecryptSection(Dumper, SectionHeader, ImageBase))
+            if (Dumper->DecryptionFactor && !DecryptSection(Dumper, SectionHeader, ImageBase))
             {
                 return FALSE;
             }

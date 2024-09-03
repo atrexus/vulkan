@@ -57,18 +57,10 @@ ResolveSections(_In_ PDUMPER Dumper, _In_ PBYTE *OriginalImage)
     for (i = 0; i < NtHeaders->FileHeader.NumberOfSections; i++, SectionHeader++)
     {
         //
-        // Update the virtual size of the section. We want to align it to the page size.
+        // Realign the virtual size of the section.
         //
-        SectionHeader->Misc.VirtualSize = ALIGN_UP(SectionHeader->Misc.VirtualSize, PAGE_SIZE);
-
-        //
-        // We wan't to skip the vmp0 section as it prvents our dump from being loaded in IDA.
-        //
-        if (lstrcmpA((PCHAR)SectionHeader->Name, ".vmp0") == 0)
-        {
-            info("Skipping section %s", SectionHeader->Name);
-            continue;
-        }
+        SectionHeader->Misc.VirtualSize =
+            ALIGN_UP(SectionHeader->Misc.VirtualSize, NtHeaders->OptionalHeader.SectionAlignment);
 
         //
         // Calculate the base address of the section.
@@ -121,7 +113,7 @@ IsPossiblyEncrypted(_In_ PIMAGE_SECTION_HEADER SectionHeader)
     //
     // If the section is named ".text" then it is possibly encrypted.
     //
-    return lstrcmpA((PCHAR)SectionHeader->Name, ".text") == 0;
+    return lstrcmpA((PCHAR)SectionHeader->Name, ".text") == 0 || lstrcmpA((PCHAR)SectionHeader->Name, ".vmp0") == 0;
 }
 
 _Success_(return)
@@ -135,10 +127,17 @@ DecryptSection(_In_ PDUMPER Dumper, _In_ PIMAGE_SECTION_HEADER SectionHeader, _I
     MEMORY_BASIC_INFORMATION MemoryInfo;
     NTSTATUS Status;
     PBOOL PagesList;
+    PCHAR SectionName;
 
+    SectionName = (PCHAR)SectionHeader->Name;
+
+    //
+    // If this section is not named ".text" then the decryption factor is not applied.
+    //
     PagesDecrypted = 0;
     TotalPageCount = SectionHeader->SizeOfRawData / PAGE_SIZE;
-    PagesToDecrypt = TotalPageCount * Dumper->DecryptionFactor;
+    PagesToDecrypt =
+        TotalPageCount * (!lstrcmpA((PCHAR)SectionHeader->Name, ".text") ? Dumper->DecryptionFactor : 1.0f);
 
     //
     // Allocate a list of booleans to keep track of the decrypted pages.
@@ -173,7 +172,7 @@ DecryptionRoutine:
         //
         PageRva = PageIndex * PAGE_SIZE;
         BaseAddress = RVA2VA(PVOID, Dumper->ModuleInfo.lpBaseOfDll, SectionHeader->VirtualAddress + PageRva);
-        BufferPtr = RVA2VA(PBYTE, ImageBase, SectionHeader->VirtualAddress + PageRva);
+        BufferPtr = RVA2VA(PBYTE, ImageBase, SectionHeader->PointerToRawData + PageRva);
 
         //
         // If the page is already decrypted, then skip it.
@@ -223,7 +222,8 @@ DecryptionRoutine:
         if (Dumper->DecryptionFactor)
         {
             info(
-                "Decrypted page at 0x%p (%lu/%lu = %.2f%%)",
+                "Decrypted page in %s at 0x%p (%lu/%lu = %.2f%%)",
+                SectionName,
                 BaseAddress,
                 PagesDecrypted,
                 PagesToDecrypt,

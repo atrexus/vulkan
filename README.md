@@ -1,7 +1,7 @@
 # Vulkan
 Vulkan dumps the main PE image of a process from memory to your disk. It targets processes protected by dynamic code encryption, implemented by the [hyperion](https://roblox.fandom.com/wiki/Hyperion) and [theia](https://reversingthread.info/index.php/2024/01/10/the-finals-defeating-theia-packer/) anti-tamper solutions. Vulkan constantly queries pages in the `.text` section of the target process and caches pages of code as they decrypt themselves. After a desired amount of the application has been decrypted (configurable via `--decrypt`) the restored PE image is saved to the disk, ready for analysis.
 
-Vulkan has been test on [Roblox](https://roblox.com) and [The Finals](https://www.reachthefinals.com/).
+Vulkan has been tested on [Roblox](https://roblox.com) and [The Finals](https://www.reachthefinals.com/).
 
 ## How to use
 After downloading the latest version from the [releases](https://github.com/atrexus/vulkan/releases) tab, you can run it from the command line like so:

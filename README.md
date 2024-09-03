@@ -8,6 +8,11 @@ After downloading the latest version from the [releases](https://github.com/atre
 ```
 vulkan.exe -p <TARGET_PROCESS> -o <OUTPUT_DIRECTORY>
 ```
+If you are unhappy with the default decryption amount and would like to have more of the executable decrypted feel free to adjust the decryption percentage like so: 
+```
+vulkan.exe -p <TARGET_PROCESS> -o <OUTPUT_DIRECTORY> --decrypt <TARGET_FACTOR>
+```
+> **Note**: Increasing the decryption factor will significantly increase the time to produce the dump. It is recommended to keep the factor between `0.6` and `0.7`.
 
 ## Contributing
 If you have anything to contribute to this project feel free to send a pull request and I will review it. If you want to contribute but are not sure what, check out the [issues](https://github.com/atrexus/vulkan/issues) tab for the latest stuff I need help with.

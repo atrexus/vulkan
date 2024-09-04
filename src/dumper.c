@@ -1,6 +1,7 @@
 #include "sections.h"
 #include "out.h"
 #include "syscalls.h"
+#include "imports.h"
 
 _Success_(return > 0)
 static DWORD
@@ -107,6 +108,15 @@ DumperDumpToDisk(_In_ PDUMPER Dumper)
     if (!ResolveSections(Dumper, &Buffer))
     {
         error("Failed to resolve the sections of the image");
+        goto Exit;
+    }
+
+    //
+    // Resolve the imports of the image.
+    //
+    if (!ResolveImports(Dumper, &Buffer))
+    {
+        error("Failed to resolve the imports of the image");
         goto Exit;
     }
 

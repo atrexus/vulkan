@@ -58,11 +58,7 @@ int _cdecl main()
    
     Name = NULL;
     DebugMode = FALSE;
-<<<<<<< Updated upstream
-    DecryptFactor = 0.60f;
-=======
     DecryptFactor = 1.0f;
->>>>>>> Stashed changes
     OutputPath = L".";
 
     for (int i = 1; i < nArgs; i++)

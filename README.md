@@ -11,7 +11,7 @@ vulkan.exe -p <TARGET_PROCESS> -o <OUTPUT_DIRECTORY>
 If no output directory is specified, the file will be saved to the current working directory (`.`). An optional `-D` parameter can also be specified if you want to run Vulkan in debug mode. This will prevent any regular user-mode application from querying information about Vulkan. 
 
 ### Decryption
-By default, the decryption factor is set to `1.0`, meaning the dumping process will only conclude once all the application's code has been decrypted. This can take an incredibly long time, so if at any moment you want to terminate the current decryption task, type `Ctrl+C` in the command line, and the dump will be saved as is.
+By default, the decryption factor is set to `1.0`, meaning the dumping process will only conclude once all the application's code has been decrypted. This can take an incredibly long time, so if at any moment you want to terminate the current decryption task, use `Ctrl+C` in the terminal, and the dump will be saved as is.
 
 If you want to set the target decryption factor manually, you can do it from the command line like so:
 ```

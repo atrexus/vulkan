@@ -2,6 +2,8 @@
 #include "out.h"
 #include "syscalls.h"
 
+volatile BOOLEAN TerminateCurrentTask = FALSE;
+
 _Success_(return > 0)
 static DWORD
 GetProcessIdByName(_In_ LPCWSTR ProcessName);
@@ -17,6 +19,10 @@ WriteImageToDisk(_In_ PDUMPER Dumper, _In_ PBYTE Buffer, _In_ SIZE_T Size);
 _Success_(return)
 static BOOL
 BuildInitialImage(_In_ PDUMPER Dumper, _Out_ PBYTE *Buffer);
+
+_Success_(return)
+static BOOL WINAPI
+CtrlHandler(DWORD fdwCtrlType);
 
 // =====================================================================================================================
 // Public functions
@@ -78,6 +84,15 @@ DumperCreate(_Out_ PDUMPER Dumper, _In_ LPWSTR ProcessName, _In_ LPWSTR OutputPa
     if (!GetModuleInfo(Dumper->Process, ProcessName, &Dumper->ModuleInfo))
     {
         error("Failed to get the module information of the target process");
+        return FALSE;
+    }
+
+    //
+    // Set the handler for the CTRL+C event.
+    //
+    if (!SetConsoleCtrlHandler(CtrlHandler, TRUE))
+    {
+        error("Failed to set the console control handler");
         return FALSE;
     }
 
@@ -326,4 +341,16 @@ BuildInitialImage(_In_ PDUMPER Dumper, _Out_ PBYTE *Buffer)
 
     info("Built initial image of target process (0x%p)", BaseAddress);
     return TRUE;
+}
+
+_Success_(return)
+static BOOL WINAPI
+CtrlHandler(DWORD fdwCtrlType)
+{
+    if (fdwCtrlType == CTRL_C_EVENT)
+    {
+        TerminateCurrentTask = TRUE;
+        return TRUE;
+    }
+    return FALSE;
 }

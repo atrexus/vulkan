@@ -165,7 +165,7 @@ DecryptionRoutine:
     //
     // Now we will iterate over all pages in the provided section and attempt to decrypt them.
     //
-    for (PageIndex = 0; PageIndex < TotalPageCount; ++PageIndex)
+    for (PageIndex = 0; PageIndex < TotalPageCount && !TerminateCurrentTask; ++PageIndex)
     {
         //
         // Calculate the base address of the current page.
@@ -234,10 +234,12 @@ DecryptionRoutine:
     //
     // We want to exit only if we have decrypted the target amount.
     //
-    if (PagesDecrypted < PagesToDecrypt)
+    if (PagesDecrypted < PagesToDecrypt && !TerminateCurrentTask)
     {
         goto DecryptionRoutine;
     }
+
+    TerminateCurrentTask = FALSE;
 
     free(PagesList);
     return TRUE;

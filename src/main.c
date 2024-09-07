@@ -58,7 +58,11 @@ int _cdecl main()
    
     Name = NULL;
     DebugMode = FALSE;
+<<<<<<< Updated upstream
     DecryptFactor = 0.60f;
+=======
+    DecryptFactor = 1.0f;
+>>>>>>> Stashed changes
     OutputPath = L".";
 
     for (int i = 1; i < nArgs; i++)
@@ -150,7 +154,7 @@ Usage()
     fprintf(
         stdout,
         "  -o <path>            The output directory where the dump will be saved (default: \".\").\n");
-    fprintf(stdout, "  --decrypt <factor>   Fraction of no access pages to have decrypted before dumping (Default: 0.6).\n");
+    fprintf(stdout, "  --decrypt <factor>   Fraction of no access pages to have decrypted before dumping (Default: 1).\n");
     fprintf(stdout, "Flags:\n");
     fprintf(stdout, "  -D                   Enable debug mode (Default: false).\n");
 }

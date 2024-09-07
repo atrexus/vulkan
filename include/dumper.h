@@ -5,6 +5,8 @@
 
 #include "nt.h"
 
+extern volatile BOOLEAN TerminateCurrentTask;
+
 //
 // Represents a dumper object.
 //

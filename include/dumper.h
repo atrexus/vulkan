@@ -2,6 +2,11 @@
 
 #include <windows.h>
 #include <Psapi.h>
+#include <direct.h>
+#include <time.h>
+
+#include <Shlwapi.h>
+#pragma comment(lib, "Shlwapi.lib")
 
 #include "nt.h"
 
@@ -18,6 +23,7 @@ typedef struct _DUMPER
     MODULEINFO ModuleInfo;  // Module information of the target process.
     LPWSTR OutputPath;      // Path to the output directory.
     FLOAT DecryptionFactor; // Decrypt no access memory regions.
+    BOOL UseTimestamp;      // Flag to indicate whether to use timestamp in output filename.
 } DUMPER, *PDUMPER;
 
 //
@@ -25,7 +31,12 @@ typedef struct _DUMPER
 // flag.
 _Success_(return)
 BOOL
-DumperCreate(_Out_ PDUMPER Dumper, _In_ LPWSTR ProcessName, _In_ LPWSTR OutputPath, _In_ FLOAT DecryptionFactor);
+DumperCreate(
+    _Out_ PDUMPER Dumper,
+    _In_ LPWSTR ProcessName,
+    _In_ LPWSTR OutputPath,
+    _In_ FLOAT DecryptionFactor,
+    _In_ BOOL UseTimestamp);
 
 //
 // Dumps the target process memory to disk. Decrypts no access memory regions if the decryption flag is set.

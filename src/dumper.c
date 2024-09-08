@@ -30,7 +30,12 @@ CtrlHandler(DWORD fdwCtrlType);
 
 _Success_(return)
 BOOL
-DumperCreate(_Out_ PDUMPER Dumper, _In_ LPWSTR ProcessName, _In_ LPWSTR OutputPath, _In_ FLOAT DecryptionFactor)
+DumperCreate(
+    _Out_ PDUMPER Dumper,
+    _In_ LPWSTR ProcessName,
+    _In_ LPWSTR OutputPath,
+    _In_ FLOAT DecryptionFactor,
+    _In_ BOOL UseTimestamp)
 {
     OBJECT_ATTRIBUTES ObjectAttributes;
     CLIENT_ID ClientId;
@@ -41,6 +46,7 @@ DumperCreate(_Out_ PDUMPER Dumper, _In_ LPWSTR ProcessName, _In_ LPWSTR OutputPa
     Dumper->OutputPath = OutputPath;
     Dumper->DecryptionFactor = DecryptionFactor;
     Dumper->ProcessId = 0;
+    Dumper->UseTimestamp = UseTimestamp;
 
     //
     // Initialize the syscall list.
@@ -253,16 +259,67 @@ static BOOL
 WriteImageToDisk(_In_ PDUMPER Dumper, _In_ PBYTE Buffer, _In_ SIZE_T Size)
 {
     WCHAR Path[MAX_PATH];
+    WCHAR Extension[MAX_PATH];
+    LPCWSTR DotPosition;
     HANDLE File;
     DWORD BytesWritten;
+    BOOL DirExists;
 
     //
-    // Construct the path to the output file.
+    // Extract the file extension from the process name
     //
-    swprintf(Path, MAX_PATH, L"%s\\%s", Dumper->OutputPath, Dumper->ProcessName);
+    DotPosition = wcsrchr(Dumper->ProcessName, L'.');
+    if (DotPosition != NULL)
+    {
+        wcscpy_s(Extension, MAX_PATH, DotPosition);
+    }
 
     //
-    // Open the file for writing.
+    // Check if the output directory exists, create it if not
+    //
+    DirExists = PathFileExistsW(Dumper->OutputPath);
+    if (!DirExists)
+    {
+        if (!CreateDirectoryW(Dumper->OutputPath, NULL) && GetLastError() != ERROR_ALREADY_EXISTS)
+        {
+            error("Failed to create output directory: %ws", Dumper->OutputPath);
+            return FALSE;
+        }
+    }
+
+    //
+    // Check if the -t argument is passed and add the timestamp to the file name
+    //
+    if (Dumper->UseTimestamp)
+    {
+        //
+        // Get the current time
+        //
+        time_t t = time(NULL);
+        struct tm timeinfo;
+        localtime_s(&timeinfo, &t);
+
+        //
+        // Format the timestamp as YYYY-MM-DD
+        //
+        WCHAR Timestamp[16];
+        wcsftime(Timestamp, sizeof(Timestamp) / sizeof(WCHAR), L"%Y-%m-%d", &timeinfo);
+
+        //
+        // Construct the output file path with timestamp
+        //
+        swprintf(Path, MAX_PATH, L"%s\\%s_%s%s", Dumper->OutputPath, Dumper->ProcessName, Timestamp, Extension);
+    }
+    else
+    {
+        //
+        // If no timestamp, use the regular format
+        //
+        swprintf(Path, MAX_PATH, L"%s\\%s", Dumper->OutputPath, Dumper->ProcessName);
+    }
+
+    //
+    // Open the file for writing
     //
     File = CreateFileW(Path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
@@ -272,7 +329,7 @@ WriteImageToDisk(_In_ PDUMPER Dumper, _In_ PBYTE Buffer, _In_ SIZE_T Size)
     }
 
     //
-    // Write the image to the file.
+    // Write the image to the file
     //
     if (!WriteFile(File, Buffer, Size, &BytesWritten, NULL))
     {
@@ -283,7 +340,7 @@ WriteImageToDisk(_In_ PDUMPER Dumper, _In_ PBYTE Buffer, _In_ SIZE_T Size)
     info("Successfully dumped image to disk (path: %ws)", Path);
 
     //
-    // Close the file handle.
+    // Close the file handle
     //
     CloseHandle(File);
 

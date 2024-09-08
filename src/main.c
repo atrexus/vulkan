@@ -35,6 +35,7 @@ EnableTokenPrivilege(_In_ LPCTSTR Privilege);
 //  Options:
 //      * -p <name> - The name of the target process to dump.
 //      * -o <path> - The output directory where the dump will be saved (default: current directory).
+//      * -t - Include a timestamp in the filename (e.g., program_2024-09-08.exe).
 //      * --decrypt <factor> - Amount (%) of no access pages to have decrypted before dumping
 //  Flags:
 //      * -D - Enable debug mode.
@@ -46,7 +47,7 @@ int _cdecl main()
     LPWSTR OutputPath, Name;
     FLOAT DecryptFactor;
     DUMPER Dumper;
-    BOOL DebugMode;
+    BOOL DebugMode, UseTimestamp;
 
     szArglist = CommandLineToArgvW(GetCommandLineW(), &nArgs);
 
@@ -55,11 +56,12 @@ int _cdecl main()
         error("CommandLineToArgvW failed with error %lu", GetLastError());
         return EXIT_FAILURE;
     }
-   
+
     Name = NULL;
     DebugMode = FALSE;
     DecryptFactor = 1.0f;
     OutputPath = L".";
+    UseTimestamp = FALSE;
 
     for (int i = 1; i < nArgs; i++)
     {
@@ -95,6 +97,10 @@ int _cdecl main()
         {
             DebugMode = TRUE;
         }
+        else if (lstrcmpW(szArglist[i], L"-t") == 0)
+        {
+            UseTimestamp = TRUE;
+        }
         else
         {
             error("Unknown option: %ws", szArglist[i]);
@@ -122,7 +128,7 @@ int _cdecl main()
     //
     // Create a new dumper object.
     //
-    if (!DumperCreate(&Dumper, Name, OutputPath, DecryptFactor))
+    if (!DumperCreate(&Dumper, Name, OutputPath, DecryptFactor, UseTimestamp))
     {
         return EXIT_FAILURE;
     }
@@ -147,10 +153,11 @@ Usage()
     fprintf(stdout, "Usage: dumper [options] <pid>\n");
     fprintf(stdout, "Options:\n");
     fprintf(stdout, "  -p <name>            The name of the target process to dump.\n");
+    fprintf(stdout, "  -o <path>            The output directory where the dump will be saved (default: \".\").\n");
+
+    fprintf(stdout, "  -t                   Include a timestamp in the filename (e.g., program_2024-09-08.exe).\n");
     fprintf(
-        stdout,
-        "  -o <path>            The output directory where the dump will be saved (default: \".\").\n");
-    fprintf(stdout, "  --decrypt <factor>   Fraction of no access pages to have decrypted before dumping (Default: 1).\n");
+        stdout, "  --decrypt <factor>   Fraction of no access pages to have decrypted before dumping (Default: 1).\n");
     fprintf(stdout, "Flags:\n");
     fprintf(stdout, "  -D                   Enable debug mode (Default: false).\n");
 }

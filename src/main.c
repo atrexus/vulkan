@@ -38,7 +38,7 @@ EnableTokenPrivilege(_In_ LPCTSTR Privilege);
 //      * -t - Include a timestamp in the filename (e.g., program_2024-09-08.exe).
 //      * --decrypt <factor> - Amount (%) of no access pages to have decrypted before dumping
 //  Flags:
-//      * -D - Enable debug mode.
+//      * -D - Run with elevated privileges (SeDebugPrivilege).
 //
 int _cdecl main()
 {
@@ -159,7 +159,7 @@ Usage()
     fprintf(
         stdout, "  --decrypt <factor>   Fraction of no access pages to have decrypted before dumping (Default: 1).\n");
     fprintf(stdout, "Flags:\n");
-    fprintf(stdout, "  -D                   Enable debug mode (Default: false).\n");
+    fprintf(stdout, "  -D                    Run with elevated privileges (Default: false).\n");
 }
 
 _Success_(return)

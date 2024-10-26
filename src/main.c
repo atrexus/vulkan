@@ -154,10 +154,9 @@ Usage()
     fprintf(stdout, "Options:\n");
     fprintf(stdout, "  -p <name>            The name of the target process to dump.\n");
     fprintf(stdout, "  -o <path>            The output directory where the dump will be saved (default: \".\").\n");
-
     fprintf(stdout, "  -t                   Include a timestamp in the filename (e.g., program_2024-09-08.exe).\n");
     fprintf(
-        stdout, "  --decrypt <factor>   Fraction of no access pages to have decrypted before dumping (Default: 1).\n");
+        stdout, "  --decrypt <factor>   Fraction of no access pages to have decrypted before dumping (Default: 1.0).\n");
     fprintf(stdout, "Flags:\n");
     fprintf(stdout, "  -D                    Run with elevated privileges (Default: false).\n");
 }

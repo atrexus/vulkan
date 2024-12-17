@@ -4,11 +4,7 @@
 
 _Success_(return)
 static BOOL
-IsPossiblyEncrypted(_In_ PIMAGE_SECTION_HEADER SectionHeader);
-
-_Success_(return)
-static BOOL
-DecryptSection(_In_ PDUMPER Dumper, _In_ PIMAGE_SECTION_HEADER SectionHeader, _In_ PBYTE ImageBase);
+ResolveCodeSection(_In_ PDUMPER Dumper, _In_ PIMAGE_SECTION_HEADER SectionHeader, _In_ PBYTE ImageBase);
 
 // =====================================================================================================================
 // Public functions
@@ -66,19 +62,16 @@ ResolveSections(_In_ PDUMPER Dumper, _In_ PBYTE *OriginalImage)
         BaseAddress = RVA2VA(PVOID, OptionalHeader->ImageBase, SectionHeader->VirtualAddress);
 
         //
-        // If the section is possibly encrypted, then we will decrypt it.
+        // If the section contains code, we will "decrypt" it.
         //
-        if (IsPossiblyEncrypted(SectionHeader))
+        if (SectionHeader->Characteristics & IMAGE_SCN_CNT_CODE && !ResolveCodeSection(Dumper, SectionHeader, ImageBase))
         {
-            if (Dumper->DecryptionFactor && !DecryptSection(Dumper, SectionHeader, ImageBase))
-            {
-                return FALSE;
-            }
+            return FALSE;
         }
         else
         {
             //
-            // If the section is not encrypted, then we will simply read it.
+            // If the section is not a code section, then we will simply read it.
             //
             Status = NtReadVirtualMemory(
                 Dumper->Process,
@@ -106,17 +99,7 @@ ResolveSections(_In_ PDUMPER Dumper, _In_ PBYTE *OriginalImage)
 
 _Success_(return)
 static BOOL
-IsPossiblyEncrypted(_In_ PIMAGE_SECTION_HEADER SectionHeader)
-{
-    //
-    // If the section is named ".text" then it is possibly encrypted.
-    //
-    return lstrcmpA((PCHAR)SectionHeader->Name, ".text") == 0 || lstrcmpA((PCHAR)SectionHeader->Name, ".vmp0") == 0;
-}
-
-_Success_(return)
-static BOOL
-DecryptSection(_In_ PDUMPER Dumper, _In_ PIMAGE_SECTION_HEADER SectionHeader, _In_ PBYTE ImageBase)
+ResolveCodeSection(_In_ PDUMPER Dumper, _In_ PIMAGE_SECTION_HEADER SectionHeader, _In_ PBYTE ImageBase)
 {
     DWORD PageRva, PagesDecrypted, PagesToDecrypt;
     SIZE_T PageIndex, TotalPageCount;
@@ -129,13 +112,9 @@ DecryptSection(_In_ PDUMPER Dumper, _In_ PIMAGE_SECTION_HEADER SectionHeader, _I
 
     SectionName = (PCHAR)SectionHeader->Name;
 
-    //
-    // If this section is not named ".text" then the decryption factor is not applied.
-    //
     PagesDecrypted = 0;
     TotalPageCount = SectionHeader->SizeOfRawData / PAGE_SIZE;
-    PagesToDecrypt =
-        TotalPageCount * (!lstrcmpA((PCHAR)SectionHeader->Name, ".text") ? Dumper->DecryptionFactor : 1.0f);
+    PagesToDecrypt = TotalPageCount * Dumper->DecryptionFactor;
 
     //
     // Allocate a list of booleans to keep track of the decrypted pages.
@@ -151,10 +130,7 @@ DecryptSection(_In_ PDUMPER Dumper, _In_ PIMAGE_SECTION_HEADER SectionHeader, _I
     //
     // Set the entire page list to FALSE.
     //
-    for (PageIndex = 0; PageIndex < TotalPageCount; ++PageIndex)
-    {
-        PagesList[PageIndex] = FALSE;
-    }
+    ZeroMemory(PagesList, TotalPageCount * sizeof(BOOL));
 
     PageRva = 0;
 
@@ -163,7 +139,7 @@ DecryptionRoutine:
     //
     // Now we will iterate over all pages in the provided section and attempt to decrypt them.
     //
-    for (PageIndex = 0; PageIndex < TotalPageCount; ++PageIndex)
+    for (PageIndex = 0; PageIndex < TotalPageCount && !TerminateCurrentTask; ++PageIndex)
     {
         //
         // Calculate the base address of the current page.
@@ -173,7 +149,7 @@ DecryptionRoutine:
         BufferPtr = RVA2VA(PBYTE, ImageBase, SectionHeader->PointerToRawData + PageRva);
 
         //
-        // If the page is already decrypted, then skip it.
+        // If the page is already read, then skip it.
         //
         if (PagesList[PageIndex])
         {
@@ -220,7 +196,7 @@ DecryptionRoutine:
         if (Dumper->DecryptionFactor)
         {
             info(
-                "Decrypted page in %s at 0x%p (%lu/%lu = %.2f%%)",
+                "Read page in %s at 0x%p (%lu/%lu = %.2f%%)",
                 SectionName,
                 BaseAddress,
                 PagesDecrypted,
@@ -232,10 +208,12 @@ DecryptionRoutine:
     //
     // We want to exit only if we have decrypted the target amount.
     //
-    if (PagesDecrypted < PagesToDecrypt)
+    if (PagesDecrypted < PagesToDecrypt && !TerminateCurrentTask)
     {
         goto DecryptionRoutine;
     }
+
+    TerminateCurrentTask = FALSE;
 
     free(PagesList);
     return TRUE;

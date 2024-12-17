@@ -60,6 +60,7 @@ int _cdecl main()
     Name = NULL;
     DebugMode = FALSE;
     DecryptFactor = 1.0f;
+
     OutputPath = L".";
     UseTimestamp = FALSE;
 

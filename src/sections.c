@@ -2,8 +2,6 @@
 #include "syscalls.h"
 #include "out.h"
 
-#define ALIGN_UP(x, align) (((x) + ((align)-1)) & ~((align)-1))
-
 _Success_(return)
 static BOOL
 ResolveCodeSection(_In_ PDUMPER Dumper, _In_ PIMAGE_SECTION_HEADER SectionHeader, _In_ PBYTE ImageBase);

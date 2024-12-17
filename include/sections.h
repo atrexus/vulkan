@@ -7,6 +7,8 @@
 
 #include "dumper.h"
 
+#define ALIGN_UP(x, align) (((x) + ((align)-1)) & ~((align)-1))
+
 //
 // Resolves the sections of the specified module. The original image contains the raw data of the module.
 //

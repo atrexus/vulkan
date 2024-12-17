@@ -19,6 +19,7 @@ set (SRC
 	"src/nt.x64.asm"
 	"src/dumper.c"
 	"src/sections.c"
+	"src/imports.c"
 )
 
 # Add source to this project's executable.

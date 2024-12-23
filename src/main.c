@@ -48,6 +48,8 @@ int _cdecl main()
     DUMPER Dumper;
     BOOL DebugMode;
 
+    SetConsoleOutputCP(CP_UTF8);
+
     szArglist = CommandLineToArgvW(GetCommandLineW(), &nArgs);
 
     if (!szArglist)

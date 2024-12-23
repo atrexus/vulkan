@@ -2,21 +2,38 @@
 #include "syscalls.h"
 #include "out.h"
 
-_Success_(return)
-static BOOL
-AddImportSection(_In_ PDUMPER Dumper, _Inout_ PBYTE *OriginalImage, _Out_ PIMAGE_SECTION_HEADER *Header);
+#include <tlhelp32.h>
+#include <winnt.h>
 
-_Success_(return)
-static BOOL
-GetLoadedModules(_In_ PDUMPER Dumper, _Out_ HMODULE **LoadedModules, _Out_ PSIZE_T Size);
+typedef struct _MODULE_ENTRY
+{
+    MODULEENTRY32 ModuleEntry;
+    LIST_ENTRY ListEntry;
+} MODULE_ENTRY, *PMODULE_ENTRY;
 
-_Success_(return)
-BOOL
-BuildImportDirectory(
-    _In_ PDUMPER Dumper,
-    _In_ HMODULE *Modules,
-    _In_ SIZE_T ModuleCount,
-    _Inout_ PBYTE ImportSectionBase);
+static _Success_(return != NULL)
+PMODULE_ENTRY
+CreateModuleEntry(_In_ PMODULEENTRY32 ModuleEntry);
+
+static VOID
+FreeModuleEntryList(_In_ PLIST_ENTRY ListHead);
+
+static void
+InitializeListHead(LIST_ENTRY *listHead);
+
+static void
+InsertTailList(LIST_ENTRY *listHead, LIST_ENTRY *newNode);
+
+static int
+IsListEmpty(LIST_ENTRY *listHead);
+
+static void
+RemoveEntryList(LIST_ENTRY *entry);
+
+static _Success_(return != NULL)
+PLIST_ENTRY
+GetLoadedModules(_In_ DWORD ProcessId);
+
 
 // =====================================================================================================================
 // Public functions
@@ -26,43 +43,17 @@ _Success_(return)
 BOOL
 ResolveImports(_In_ PDUMPER Dumper, _Inout_ PBYTE *OriginalImage)
 {
-    HMODULE *Modules;
-    SIZE_T ModuleCount;
-    PIMAGE_SECTION_HEADER ImportSectionHeader;
-    DWORD ImportSectionBase;
-    PIMAGE_IMPORT_DESCRIPTOR ImportDescriptor;
-    DWORD i;
-
-    //
-    // Add the import section to the image.
-    //
-    if (!AddImportSection(Dumper, OriginalImage, &ImportSectionHeader))
-    {
-        error("Failed to add the import section to the image");
-        return FALSE;
-    }
-
-    ImportSectionBase = ImportSectionHeader->PointerToRawData;
-
-    info(
-        "Added import section \"%s\" (0x%08X) to the image",
-        (PCHAR)ImportSectionHeader->Name,
-        ImportSectionHeader->VirtualAddress);
+    PLIST_ENTRY ModuleEntry;
 
     //
     // Get the loaded modules of the target process.
     //
-    if (!GetLoadedModules(Dumper, &Modules, &ModuleCount))
+    ModuleEntry = GetLoadedModules(Dumper->ProcessId);
+
+    if (!ModuleEntry)
     {
         error("Failed to get the loaded modules of the target process");
         return FALSE;
-    }
-
-    for (i = 0; i < ModuleCount; i++)
-    {
-        ImportDescriptor = (PIMAGE_IMPORT_DESCRIPTOR)(*OriginalImage + ImportSectionBase);
-
-        THUNK
     }
 
     return TRUE;
@@ -71,148 +62,132 @@ ResolveImports(_In_ PDUMPER Dumper, _Inout_ PBYTE *OriginalImage)
 // =====================================================================================================================
 // Private functions
 // =====================================================================================================================
-_Success_(return)
-static BOOL
-AddImportSection(_In_ PDUMPER Dumper, _Inout_ PBYTE *OriginalImage, _Out_ PIMAGE_SECTION_HEADER *Header)
+_Success_(return != NULL)
+PMODULE_ENTRY
+CreateModuleEntry(PMODULEENTRY32 ModuleEntry)
 {
-    PIMAGE_DOS_HEADER DosHeader;
-    PIMAGE_NT_HEADERS NtHeaders;
-    PIMAGE_SECTION_HEADER LastSectionHeader;
-    IMAGE_SECTION_HEADER ImportSectionHeader;
-    PBYTE ImportSectionHeaderBase;
+    PMODULE_ENTRY Entry;
 
-    //
-    // Ensure that the original image is not NULL.
-    //
-    if (OriginalImage == NULL)
+    Entry = (PMODULE_ENTRY)malloc(sizeof(MODULE_ENTRY));
+
+    if (Entry == NULL)
     {
-        return FALSE;
+        error("Failed to allocate memory for the module entry");
+        return NULL;
     }
 
-    //
-    // Get the headers of the image.
-    //
-    DosHeader = (PIMAGE_DOS_HEADER)*OriginalImage;
-    NtHeaders = RVA2VA(PIMAGE_NT_HEADERS, *OriginalImage, DosHeader->e_lfanew);
-    LastSectionHeader = IMAGE_FIRST_SECTION(NtHeaders) + NtHeaders->FileHeader.NumberOfSections - 1;
+    Entry->ModuleEntry = *ModuleEntry;
+    InitializeListHead(&Entry->ListEntry);
 
-    //
-    // Get the base of the import section header.
-    //
-    ImportSectionHeaderBase = RVA2VA(PBYTE, LastSectionHeader, sizeof(IMAGE_SECTION_HEADER));
-
-    //
-    // Lets check to see if we need to allocate more space for the new section header (we do this anyways).
-    //
-    if (ImportSectionHeaderBase + sizeof(IMAGE_SECTION_HEADER) >
-        *OriginalImage + NtHeaders->OptionalHeader.SizeOfHeaders)
-    {
-        info("Need to allocate more space for the new section header");
-    }
-
-    //
-    // Zero out the import section header.
-    //
-    ZeroMemory(&ImportSectionHeader, sizeof(IMAGE_SECTION_HEADER));
-
-    //
-    // Set the name of the import section header.
-    //
-    strcpy_s((PCHAR)ImportSectionHeader.Name, sizeof(ImportSectionHeader.Name), ".vulkan");
-
-    //
-    // Set the virtual address and pointer to raw of the import section header based on the last section header.
-    //
-    ImportSectionHeader.VirtualAddress = LastSectionHeader->VirtualAddress + LastSectionHeader->Misc.VirtualSize;
-    ImportSectionHeader.PointerToRawData = LastSectionHeader->PointerToRawData + LastSectionHeader->SizeOfRawData;
-
-    //
-    // Set the characteristics of the import section header.
-    //
-    ImportSectionHeader.Characteristics = IMAGE_SCN_CNT_INITIALIZED_DATA | IMAGE_SCN_MEM_READ;
-
-    //
-    // Copy the import section header to the image.
-    //
-    memcpy(ImportSectionHeaderBase, &ImportSectionHeader, sizeof(IMAGE_SECTION_HEADER));
-
-    //
-    // Update the number of sections in the image.
-    //
-    NtHeaders->FileHeader.NumberOfSections++;
-
-    //
-    // Set the output header.
-    //
-    *Header = ImportSectionHeaderBase;
-
-    return TRUE;
+    return Entry;
 }
 
-_Success_(return)
-static BOOL
-GetLoadedModules(_In_ PDUMPER Dumper, _Out_ HMODULE **LoadedModules, _Out_ PSIZE_T Size)
+VOID
+FreeModuleEntryList(PLIST_ENTRY ListHead)
 {
-    HMODULE Modules[1024];
-    DWORD Needed;
-    DWORD i;
-
-    //
-    // Enumerate the loaded modules of the target process.
-    //
-    if (!EnumProcessModules(Dumper->Process, Modules, sizeof(Modules), &Needed))
+    PLIST_ENTRY entry = ListHead->Flink;
+    while (entry != ListHead)
     {
-        return FALSE;
+        PMODULE_ENTRY node = CONTAINING_RECORD(entry, MODULE_ENTRY, ListEntry);
+        entry = entry->Flink;
+        free(node);
     }
-
-    //
-    // Update the size of the loaded modules.
-    //
-    *Size = Needed / sizeof(HMODULE);
-
-    //
-    // Allocate memory for the loaded modules.
-    //
-    *LoadedModules = (HMODULE *)malloc(*Size * sizeof(HMODULE));
-
-    if (*LoadedModules == NULL)
-    {
-        return FALSE;
-    }
-
-    //
-    // Copy the loaded modules to the output.
-    //
-    for (i = 0; i < *Size; ++i)
-    {
-        (*LoadedModules)[i] = Modules[i];
-    }
-
-    return TRUE;
 }
 
-_Success_(return)
-BOOL
-BuildImportDirectory(
-    _In_ PDUMPER Dumper,
-    _In_ HMODULE *Modules,
-    _In_ SIZE_T ModuleCount,
-    _Inout_ PBYTE ImportSectionBase)
+_Success_(return != NULL)
+PLIST_ENTRY
+GetLoadedModules(DWORD ProcessId)
 {
-    PIMAGE_IMPORT_DESCRIPTOR ImportDescriptor;
-    SIZE_T i;
+    HANDLE hSnapshot;
+    MODULEENTRY32 ModuleEntry;
+    PLIST_ENTRY ListHead;
+    PMODULE_ENTRY Entry;
 
-    ImportDescriptor = (PIMAGE_IMPORT_DESCRIPTOR)ImportSectionBase;
+    //
+    // Create a new module list head.
+    //
+    ListHead = (PLIST_ENTRY)malloc(sizeof(LIST_ENTRY));
 
-    for (i = 0; i < ModuleCount; i++)
+    if (ListHead == NULL)
     {
-        continue;
+        error("Failed to allocate memory for the module list head");
+        return NULL;
     }
 
     //
-    // Null-terminate the import descriptor array.
+    // Initialize the list head.
     //
-    ZeroMemory(ImportDescriptor, sizeof(IMAGE_IMPORT_DESCRIPTOR));
+    InitializeListHead(ListHead);
 
-    return TRUE;
+    //
+    // Take a snapshot of all modules in the target process.
+    //
+    hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, ProcessId);
+
+    if (hSnapshot == INVALID_HANDLE_VALUE)
+    {
+        error("Failed to create a snapshot of the target process modules");
+        free(ListHead);
+        return NULL;
+    }
+
+    //
+    // Initialize the module entry structure.
+    //
+    ModuleEntry.dwSize = sizeof(MODULEENTRY32);
+
+    //
+    // Iterate over the modules in the target process.
+    //
+    if (Module32First(hSnapshot, &ModuleEntry))
+    {
+        do
+        {
+            if (Entry = CreateModuleEntry(&ModuleEntry))
+            {
+                InsertTailList(ListHead, &Entry->ListEntry);
+            }
+        } while (Module32Next(hSnapshot, &ModuleEntry));
+    }
+
+    //
+    // Close the snapshot handle.
+    //
+    CloseHandle(hSnapshot);
+    return ListHead;
+}
+
+void
+InitializeListHead(LIST_ENTRY *listHead)
+{
+    listHead->Flink = listHead;
+    listHead->Blink = listHead;
+}
+
+void
+InsertTailList(LIST_ENTRY *listHead, LIST_ENTRY *newNode)
+{
+    LIST_ENTRY *last = listHead->Blink;
+
+    newNode->Flink = listHead;
+    newNode->Blink = last;
+
+    last->Flink = newNode;
+    listHead->Blink = newNode;
+}
+
+int
+IsListEmpty(LIST_ENTRY *listHead)
+{
+    return listHead->Flink == listHead;
+}
+
+void
+RemoveEntryList(LIST_ENTRY *entry)
+{
+    entry->Blink->Flink = entry->Flink;
+    entry->Flink->Blink = entry->Blink;
+
+    entry->Flink = NULL;
+    entry->Blink = NULL;
 }

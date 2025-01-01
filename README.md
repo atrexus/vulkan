@@ -18,7 +18,7 @@ To view the help message use the `-h` or `--help` option.
 
 ### Decryption
 
-As mentioned, Vulkan will continue to query pages of code in the target module untill all `NOACCESS` pages are resolved. Depending on the application, there might always be `NOACCESS` pages so decryption could end in an infinate loop. To terminate the decryption task, you can use the `Ctrl+C` keyboard shortcut (for best results wait until 50% of the module is decrypted).
+As mentioned, Vulkan will continue to query pages of code in the target module untill all `NOACCESS` pages are resolved. Depending on the application, there might always be `NOACCESS` pages so decryption could end in an infinite loop. To terminate the decryption task, you can use the `Ctrl+C` keyboard shortcut (for best results wait until 50% of the module is decrypted).
 
 If you would like to automate termination, you can use the `-d` or `--decryption-factor` option, and provide it with a threshold ranging from `0.0` to `0.1` (again, for best results provide a value of `0.5` or above):
 ```

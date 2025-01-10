@@ -37,8 +37,7 @@ std::int32_t main( std::int32_t argc, char* argv[] )
         .help( "the decryption factor to use when decrypting the PE" )
         .default_value( 1.0f );
     parser.add_argument( "-i", "--resolve-imports" ).flag( ).default_value< bool >( false ).help( "rebuild the import table from scratch" );
-
-    SetConsoleCtrlHandler( console_ctrl_handler, TRUE );
+    parser.add_argument( "-w", "--wait" ).flag( ).default_value< bool >( false ).help( "wait for the process to start" );
 
     // Parse the command line arguments
     try
@@ -51,9 +50,23 @@ std::int32_t main( std::int32_t argc, char* argv[] )
         return 1;
     }
 
+    // Register the console control handler to terminate the application when CTRL+C or CTRL+BREAK is pressed.
+    SetConsoleCtrlHandler( console_ctrl_handler, TRUE );
+
     try
     {
-        auto process = wincpp::process_t::open( parser.get< std::string >( "process" ) );
+        std::unique_ptr< wincpp::process_t > process = nullptr;
+
+        const auto& should_wait = parser.get< bool >( "wait" );
+
+        do
+        {
+            process = wincpp::process_t::open( parser.get< std::string >( "process" ) );
+
+            if ( should_wait )
+                std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
+
+        } while ( !process && should_wait );
 
         if ( !process )
         {

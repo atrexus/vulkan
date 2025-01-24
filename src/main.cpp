@@ -62,7 +62,7 @@ std::int32_t main( std::int32_t argc, char* argv[] )
         do
         {
             if ( stop_source.get_token().stop_requested() ) {
-                spdlog::debug( "Exiting..." );
+                spdlog::debug( "User Interrupt, Exiting" );
                 return 0;
             }
             

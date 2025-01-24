@@ -34,8 +34,8 @@ std::int32_t main( std::int32_t argc, char* argv[] )
     parser.add_argument( "-o", "--output" ).help( "the name of the output file [default: \"<module>\"]" );
     parser.add_argument( "-d", "--decryption-factor" )
         .default_value< float >( 1.0f )
-        .help( "the decryption factor to use when decrypting the PE" )
-        .default_value( 1.0f );
+        .scan< 'g', float >( )
+        .help( "the decryption factor to use when decrypting the PE" );
     parser.add_argument( "-i", "--resolve-imports" ).flag( ).default_value< bool >( false ).help( "rebuild the import table from scratch" );
     parser.add_argument( "-w", "--wait" ).flag( ).default_value< bool >( false ).help( "wait for the process to start" );
 

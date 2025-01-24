@@ -187,32 +187,49 @@ namespace vulkan
 
         spdlog::debug( "Locating cross references..." );
 
+        struct reference_t
+        {
+            std::uintptr_t address;
+            std::uint32_t offset;
+            std::uint32_t len;
+        };
+
+        std::vector< reference_t > references;
+
         // Now we need to resolve all of the imports individually. We need to scan the entire image for refrences to the imports.
         const auto& calls = wincpp::patterns::scanner::find_all< wincpp::patterns::scanner::algorithm_t::naive_t >(
             _image->buffer( ), wincpp::patterns::pattern_t( "\xFF\x15\x00\x00\x00\x00", "xx????" ) );
 
-        spdlog::debug( "Processing {} call instructions", calls.size( ) );
-
-        // Get the old address table (.rdata)
-        const auto& rdata = _image->section_headers( )->find( ".rdata" );
-
+        // Add the calls to the references vector
         for ( const auto& call : calls )
+            references.push_back( { call, 2, 6 } );
+
+        // Now we need to search for all relative jumps to the imports.
+        const auto& jumps = wincpp::patterns::scanner::find_all< wincpp::patterns::scanner::algorithm_t::naive_t >(
+            _image->buffer( ), wincpp::patterns::pattern_t( "\x48\xFF\x25\x00\x00\x00\x00", "xx?????" ) );
+
+        // Add the jumps to the references vector
+        for ( const auto& jump : jumps )
+            references.push_back( { jump, 3, 7 } );
+
+        spdlog::debug( "Processing {} cross references", references.size( ) );
+
+        for ( const auto& reference : references )
         {
-            // Extract the relative offset from the call instruction
-            auto offset = reinterpret_cast< std::uint32_t* >( _image->buffer( ).data( ) + call + 2 );
+            // Extract the relative offset from the instruction
+            auto offset = reinterpret_cast< std::uint32_t* >( _image->buffer( ).data( ) + reference.address + reference.offset );
 
             // Compute the absolute address of the call instruction
-            const auto next_instruction = call + 6;
+            const auto next_instruction = reference.address + reference.len;
             const auto& absolute_address = next_instruction + *offset;
-
-            // Check if the address is in the old address table (.rdata)
-            if ( absolute_address < rdata->PointerToRawData ||
-                 absolute_address > static_cast< std::size_t >( rdata->PointerToRawData ) + rdata->SizeOfRawData )
-                continue;
 
             // Dereference the absolute address
             const auto& export_address =
                 *reinterpret_cast< std::uintptr_t* >( _image->buffer( ).data( ) + _image->rva_to_offset( absolute_address ) );
+
+            // Quick check to see if the dereferenced address could be a code address
+            if ( export_address < 0x00007FF000000000 || export_address > 0x00007FFFFFFFFFFF )
+                continue;
 
             // Check if the old IAT entry is in the IAT map
             if ( const auto& iat_entry = iat_map.find( export_address ); iat_entry != iat_map.end( ) )
@@ -226,7 +243,7 @@ namespace vulkan
                 // Write the new relative offset
                 *offset = new_offset;
 
-                spdlog::debug( "Patched relative call @ 0x{:X}", _image->image_base( ) + _image->offset_to_rva( call ) );
+                spdlog::debug( "Patched instruction @ 0x{:X} to 0x{:X}", _image->image_base( ) + reference.address, *offset );
             }
         }
     }

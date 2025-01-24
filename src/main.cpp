@@ -61,11 +61,13 @@ std::int32_t main( std::int32_t argc, char* argv[] )
 
         do
         {
+            if ( stop_source.get_token().stop_requested() ) {
+                spdlog::debug( "Exiting..." );
+                return 0;
+            }
+            
             process = wincpp::process_t::open( parser.get< std::string >( "process" ) );
-
-            if ( should_wait )
-                std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
-
+            std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
         } while ( !process && should_wait );
 
         if ( !process )

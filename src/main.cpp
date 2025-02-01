@@ -24,7 +24,7 @@ std::int32_t main( std::int32_t argc, char* argv[] )
 {
     spdlog::set_level( spdlog::level::debug );
 
-    argparse::ArgumentParser parser( "vulkan", "2.0.0" );
+    argparse::ArgumentParser parser( "vulkan", "2.0.2" );
 
     parser.add_description(
         "A dumper for processes protected by hyperion. For best results, terminate page decryption when >50% of pages are decrypted.\nYou can "

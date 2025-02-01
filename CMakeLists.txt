@@ -47,6 +47,8 @@ set (HDR
 	"include/dumper.hpp"
 
 	"include/pe/image.hpp"
+	"include/pe/image_fixer.hpp"
+
 	"include/pe/section_headers.hpp"
 	"include/pe/import_directory.hpp"
 	"include/pe/util.hpp"
@@ -57,6 +59,7 @@ set (SRC
 	"src/main.cpp"
 	"src/dumper.cpp"
 
+	"src/pe/image_fixer.cpp"
 	"src/pe/image.cpp"
 	"src/pe/section_headers.cpp"
 	"src/pe/import_directory.cpp"

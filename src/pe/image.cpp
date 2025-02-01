@@ -4,6 +4,8 @@
 
 #include "pe/util.hpp"
 
+#include "spdlog/spdlog.h"
+
 namespace vulkan::pe
 {
     image::image( const wincpp::modules::module_t& module )
@@ -193,8 +195,65 @@ namespace vulkan::pe
         return 0;
     }
 
+    DWORD calculate_checksum( std::vector< uint8_t > buffer, size_t file_size )
+    {
+        DWORD sum = 0;
+        WORD* data = reinterpret_cast< WORD* >( buffer.data( ) );
+        size_t num_words = file_size / sizeof( WORD );
+
+        for ( size_t i = 0; i < num_words; ++i )
+        {
+            sum += data[ i ];
+            if ( sum > 0xFFFF )
+            {
+                sum = ( sum & 0xFFFF ) + ( sum >> 16 );
+            }
+        }
+
+        if ( file_size % sizeof( WORD ) )
+        {
+            sum += ( static_cast< WORD >( buffer[ file_size - 1 ] ) << 8 );
+            if ( sum > 0xFFFF )
+            {
+                sum = ( sum & 0xFFFF ) + ( sum >> 16 );
+            }
+        }
+
+        return ~sum;
+    }
+
     bool image::save_to_file( std::string_view filepath )
     {
+        // could maybe make this a optional argument
+        // ignore shitty code, it works
+        // optimize it if you want
+        
+        std::ofstream tempfile( filepath.data(), std::ios::binary );
+        if ( !tempfile.is_open( ) )
+            return false;
+
+        tempfile.seekp( 0, std::ios::end );
+        size_t file_size = tempfile.tellp( );
+        tempfile.close( );
+
+        spdlog::info( "Fixing Image (for ida)" );
+
+        _nt_headers->OptionalHeader.CheckSum = 0;
+        uint32_t section_alignment = _nt_headers->OptionalHeader.SectionAlignment;
+        IMAGE_SECTION_HEADER* sections = IMAGE_FIRST_SECTION( _nt_headers );
+
+        for ( size_t i = 0; i < _nt_headers->FileHeader.NumberOfSections; ++i )
+        {
+            sections[ i ].VirtualAddress = ( sections[ i ].VirtualAddress / section_alignment ) * section_alignment;
+            sections[ i ].SizeOfRawData = ( sections[ i ].SizeOfRawData / 512 ) * 512;
+        }
+
+
+        DWORD checksum = calculate_checksum( _buffer, file_size );
+        _nt_headers->OptionalHeader.CheckSum = checksum;
+
+        spdlog::info( "Image has been sucessfully fixed" );
+
         std::ofstream file( filepath.data( ), std::ios::binary );
 
         if ( !file.is_open( ) )

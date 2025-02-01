@@ -1,6 +1,8 @@
 #include "argparse/argparse.hpp"
+#include "pe/image_fixer.hpp"
 #include "dumper.hpp"
 #include "spdlog/spdlog.h"
+#include <filesystem>
 
 std::stop_source stop_source;
 
@@ -38,6 +40,7 @@ std::int32_t main( std::int32_t argc, char* argv[] )
         .help( "the decryption factor to use when decrypting the PE" );
     parser.add_argument( "-i", "--resolve-imports" ).flag( ).default_value< bool >( false ).help( "rebuild the import table from scratch" );
     parser.add_argument( "-w", "--wait" ).flag( ).default_value< bool >( false ).help( "wait for the process to start" );
+    parser.add_argument( "-f", "--fix" ).flag( ).default_value< bool >( false ).help( "fixes the PE" );
 
     // Parse the command line arguments
     try
@@ -61,13 +64,11 @@ std::int32_t main( std::int32_t argc, char* argv[] )
 
         do
         {
-            if ( stop_source.get_token().stop_requested() ) {
-                spdlog::debug( "User Interrupt, Exiting" );
-                return 0;
-            }
-            
             process = wincpp::process_t::open( parser.get< std::string >( "process" ) );
-            std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
+
+            if ( should_wait )
+                std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
+
         } while ( !process && should_wait );
 
         if ( !process )
@@ -89,10 +90,15 @@ std::int32_t main( std::int32_t argc, char* argv[] )
         const auto& image = vulkan::dumper::dump( process, opts, stop_source.get_token( ) );
 
         const auto& output = parser.present< std::string >( "-o" ).value_or( opts.module_name( ).data( ) );
+        std::filesystem::path fullPath = std::filesystem::absolute(output);
 
-        spdlog::info( "Dumping module: \"{}\" to \"{}\"", opts.module_name( ), output );
+        spdlog::info( "Dumping module: \"{}\" to \"{}\"", opts.module_name(), fullPath.string() );
 
-        image->save_to_file( output );
+        bool success = image->save_to_file(output);
+        if (parser.get<bool>("fix") && success == true) {
+            spdlog::info("Fixing the PE");
+            ImageUtils::fixImage(fullPath.string());
+        }
     }
     catch ( const std::exception& ex )
     {

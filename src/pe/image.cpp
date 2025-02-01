@@ -1,4 +1,5 @@
 #include "pe/image.hpp"
+#include "spdlog/spdlog.h"
 
 #include <fstream>
 
@@ -193,16 +194,19 @@ namespace vulkan::pe
         return 0;
     }
 
-    bool image::save_to_file( std::string_view filepath )
+    bool image::save_to_file(std::string_view filepath)
     {
-        std::ofstream file( filepath.data( ), std::ios::binary );
+        std::ofstream file(filepath.data(), std::ios::binary);
 
-        if ( !file.is_open( ) )
+        if (!file.is_open()) {
+            spdlog::error("Failed to open directory! Proper usage: -o <FOLDER/DUMPS_NAME.exe>");
             return false;
+        }
 
-        file.write( reinterpret_cast< const char* >( _buffer.data( ) ), _buffer.size( ) );
+        file.write(reinterpret_cast<const char*>(_buffer.data()), _buffer.size());
+        file.close();
 
-        file.close( );
+        spdlog::info("File saved to: {}", filepath);
 
         return true;
     }

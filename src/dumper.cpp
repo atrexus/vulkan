@@ -70,6 +70,9 @@ namespace vulkan
         if ( options.resolve_imports( ) )
             d->resolve_imports( process->module_factory.modules( ) );
 
+        // Refresh the image one last time. This will recalculate the checksum.
+        d->_image->refresh( );
+
         return std::move( d->_image );
     }
 
@@ -112,7 +115,7 @@ namespace vulkan
                         // If the page is not accessible, skip.
                         if ( !region.protection( ).has( wincpp::memory::protection_t::noaccess_t ) )
                         {
-                            if ( const auto& data = _module.read( absolute_address + page_rva, 0x1000 ) )
+                            if ( const auto& data = _module.factory.read( absolute_address + page_rva, 0x1000 ) )
                             {
                                 const auto percent = static_cast< double >( pages_read.size( ) ) / total_pages * 100.0;
 
@@ -132,7 +135,7 @@ namespace vulkan
             }
             else
             {
-                if ( const auto& data = _module.read( absolute_address, header->SizeOfRawData ) )
+                if ( const auto& data = _module.factory.read( absolute_address, header->SizeOfRawData ) )
                 {
                     // Copy the data into the image buffer.
                     std::copy( data.get( ), data.get( ) + header->SizeOfRawData, _image->buffer( ).begin( ) + header->PointerToRawData );
@@ -150,11 +153,15 @@ namespace vulkan
                     0x00 );
             }
         }
+
+        spdlog::debug( "Resolved all sections" );
     }
 
     void dumper::resolve_imports( const std::vector< std::shared_ptr< wincpp::modules::module_t > >& modules )
     {
         _image->refresh( );
+
+        spdlog::debug( "Collecting all exports..." );
 
         // Get the imports from the modules
         const auto& imports = get_imports( modules );
@@ -194,23 +201,23 @@ namespace vulkan
             std::uint32_t len;
         };
 
+        // An immutable list of patterns to search for. The first parameter is the pattern, the second is the offset and length of the relative
+        // address. The `address` field is always set to zero, as it gets filled in later.
+        const std::list< std::pair< wincpp::patterns::pattern_t, reference_t > > patterns = {
+            { wincpp::patterns::pattern_t( "\xFF\x15\x00\x00\x00\x00", "xx????" ), { 0, 2, 6 } },
+            { wincpp::patterns::pattern_t( "\x48\xFF\x25\x00\x00\x00\x00", "xx?????" ), { 0, 3, 7 } }
+        };
+
         std::vector< reference_t > references;
 
-        // Now we need to resolve all of the imports individually. We need to scan the entire image for refrences to the imports.
-        const auto& calls = wincpp::patterns::scanner::find_all< wincpp::patterns::scanner::algorithm_t::naive_t >(
-            _image->buffer( ), wincpp::patterns::pattern_t( "\xFF\x15\x00\x00\x00\x00", "xx????" ) );
+        for ( const auto& [ pattern, reference ] : patterns )
+        {
+            const auto& results =
+                wincpp::patterns::scanner::find_all< wincpp::patterns::scanner::algorithm_t::naive_t >( _image->buffer( ), pattern );
 
-        // Add the calls to the references vector
-        for ( const auto& call : calls )
-            references.push_back( { call, 2, 6 } );
-
-        // Now we need to search for all relative jumps to the imports.
-        const auto& jumps = wincpp::patterns::scanner::find_all< wincpp::patterns::scanner::algorithm_t::naive_t >(
-            _image->buffer( ), wincpp::patterns::pattern_t( "\x48\xFF\x25\x00\x00\x00\x00", "xx?????" ) );
-
-        // Add the jumps to the references vector
-        for ( const auto& jump : jumps )
-            references.push_back( { jump, 3, 7 } );
+            for ( const auto& result : results )
+                references.push_back( { result, reference.offset, reference.len } );
+        }
 
         spdlog::debug( "Processing {} cross references", references.size( ) );
 

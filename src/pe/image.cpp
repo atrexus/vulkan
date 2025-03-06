@@ -6,6 +6,28 @@
 
 namespace vulkan::pe
 {
+    std::uint32_t image::compute_checksum( ) const noexcept
+    {
+        std::uint32_t sum = 0;
+
+        const auto data = reinterpret_cast< std::uint32_t* >( _buffer.data( ) );
+        const auto size = _buffer.size( ) / sizeof( std::uint32_t );
+
+        for ( std::size_t i = 0; i < size; ++i )
+        {
+            if ( ( sum += data[ i ] ) > 0xFFFF )
+                sum = ( sum & 0xFFFF ) + ( sum >> 0x10 );
+        }
+
+        if ( size % sizeof( std::uint32_t ) )
+        {
+            if ( ( sum += ( static_cast< std::uint16_t >( data[ size - 1 ] ) << 0x8 ) ) > 0xFFFF )
+                sum = ( sum & 0xFFFF ) + ( sum >> 0x10 );
+        }
+
+        return ~sum;
+    }
+
     image::image( const wincpp::modules::module_t& module )
     {
         _buffer.resize( module.size( ) );
@@ -164,6 +186,11 @@ namespace vulkan::pe
             return false;
 
         _import_directory->refresh( this );
+
+        _nt_headers->OptionalHeader.CheckSum = compute_checksum( );
+
+        // Remove the debug directory. It's useless since we don't have the PDB.
+        //_nt_headers->OptionalHeader.DataDirectory[ IMAGE_DIRECTORY_ENTRY_DEBUG ] = { 0 };
 
         return true;
     }

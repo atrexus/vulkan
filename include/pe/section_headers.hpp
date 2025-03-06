@@ -23,6 +23,11 @@ namespace vulkan::pe
         /// <param name="nt_headers">The NT headers to use.</param>
         explicit section_headers( PIMAGE_NT_HEADERS nt_headers ) noexcept;
 
+        /// <summary>
+        /// Fixes the alignment of the section headers.
+        /// </summary>
+        void realign( ) const noexcept;
+
        public:
         /// <summary>
         /// Returns the number of sections in the image.

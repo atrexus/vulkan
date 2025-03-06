@@ -23,6 +23,12 @@ namespace vulkan::pe
 
         bool _is_valid = false;
 
+        /// <summary>
+        /// Computes the checksum of the image.
+        /// </summary>
+        /// <returns>The checksum of the image.</returns>
+        std::uint32_t compute_checksum( ) const noexcept;
+
        public:
         /// <summary>
         /// Creates a new image from a loaded module.

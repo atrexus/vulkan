@@ -81,6 +81,18 @@ namespace vulkan::pe
         void append( IMAGE_SECTION_HEADER& header ) const noexcept;
 
         /// <summary>
+        /// Removes a section header from the image.
+        /// </summary>
+        /// <param name="name">The name of the section header to remove.</param>
+        void remove( const char* name ) const noexcept;
+
+        /// <summary>
+        /// Removes a section header from the image.
+        /// </summary>
+        /// <param name="idx">The index of the section header to remove.</param>
+        void remove( const std::uint16_t idx ) const noexcept;
+
+        /// <summary>
         /// Returns the section header with the specified name.
         /// </summary>
         /// <param name="name">The name of the section header.</param>

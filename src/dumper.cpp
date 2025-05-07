@@ -97,6 +97,9 @@ namespace vulkan
             if ( std::find( _options.ignore_sections( ).begin( ), _options.ignore_sections( ).end( ), name ) != _options.ignore_sections( ).end( ) )
             {
                 spdlog::debug( "Ignoring section: \"{}\"", name );
+
+                _image->section_headers( )->remove( idx );
+                --idx;
                 continue;
             }
 

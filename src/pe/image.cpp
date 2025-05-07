@@ -41,18 +41,7 @@ namespace vulkan::pe
         // Create the import directory.
         _import_directory = std::unique_ptr< pe::import_directory >( new pe::import_directory( ) );
 
-        if ( _is_valid = refresh( ) )
-        {
-            auto& headers = section_headers( );
-
-            // Because we're mapping the image, we need to set the raw data to the virtual address.
-            for ( std::uint16_t i = 0; i < headers->count( ); ++i )
-            {
-                const auto section = headers->at( i );
-                section->PointerToRawData = section->VirtualAddress;
-                section->SizeOfRawData = section->Misc.VirtualSize;
-            }
-        }
+        _is_valid = refresh( );
     }
 
     std::vector< std::uint8_t >& image::buffer( ) const noexcept
@@ -189,9 +178,6 @@ namespace vulkan::pe
 
         _nt_headers->OptionalHeader.CheckSum = compute_checksum( );
 
-        // Remove the debug directory. It's useless since we don't have the PDB.
-        //_nt_headers->OptionalHeader.DataDirectory[ IMAGE_DIRECTORY_ENTRY_DEBUG ] = { 0 };
-
         return true;
     }
 
@@ -204,6 +190,7 @@ namespace vulkan::pe
             if ( rva >= section->VirtualAddress && rva < section->VirtualAddress + section->Misc.VirtualSize )
                 return section->PointerToRawData + ( rva - section->VirtualAddress );
         }
+
         return 0;
     }
 

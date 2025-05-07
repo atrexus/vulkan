@@ -11,7 +11,10 @@
 
 namespace vulkan
 {
-    dumper::dumper( const wincpp::modules::module_t& module, const dumper::options& options ) : _module( module ), _options( options )
+    dumper::dumper( const wincpp::modules::module_t& module, const dumper::options& options )
+        : _module( module ),
+          _file( module.path( ), std::ios::binary ),
+          _options( options )
     {
         spdlog::debug( "Module: \"{}\" @ 0x{:X} - {} bytes", _module.name( ), _module.address( ), _module.size( ) );
 
@@ -70,6 +73,8 @@ namespace vulkan
         if ( options.resolve_imports( ) )
             d->resolve_imports( process->module_factory.modules( ) );
 
+        d->resolve_runtime_functions( );
+
         // Refresh the image one last time. This will recalculate the checksum.
         d->_image->refresh( );
 
@@ -82,10 +87,22 @@ namespace vulkan
         {
             const auto& header = _image->section_headers( )->at( idx );
 
-            const auto& absolute_address = _image->image_base( ) + header->VirtualAddress;
+            // Skip invalid sections
+            if ( !header->PointerToRawData || !header->SizeOfRawData )
+                continue;
+
             const auto& name = reinterpret_cast< const char* >( header->Name );
 
-            spdlog::info( "Resolving Section: \"{}\" @ 0x{:X} - {} bytes", name, absolute_address, header->Misc.VirtualSize );
+            // Skip sections that are explicitly ignored.
+            if ( std::find( _options.ignore_sections( ).begin( ), _options.ignore_sections( ).end( ), name ) != _options.ignore_sections( ).end( ) )
+            {
+                spdlog::debug( "Ignoring section: \"{}\"", name );
+                continue;
+            }
+
+            const auto& absolute_address = _image->image_base( ) + header->VirtualAddress;
+
+            spdlog::info( "Resolving section: \"{}\" @ 0x{:X} - {} bytes", name, absolute_address, header->Misc.VirtualSize );
 
             // We need to read code sections page by page.
             if ( header->Characteristics & IMAGE_SCN_CNT_CODE )
@@ -99,7 +116,7 @@ namespace vulkan
                     _image->buffer( ).begin( ) + header->PointerToRawData + header->SizeOfRawData,
                     0x90 );
 
-                while ( !stop_token.stop_requested( ) && ( pages_read.size( ) < total_pages ) )
+                while ( !stop_token.stop_requested( ) && ( pages_read.size( ) <= total_pages ) )
                 {
                     for ( auto page = 0; page < total_pages; ++page )
                     {
@@ -141,10 +158,31 @@ namespace vulkan
                     std::copy( data.get( ), data.get( ) + header->SizeOfRawData, _image->buffer( ).begin( ) + header->PointerToRawData );
                     continue;
                 }
-                else
+
+                if ( _file )
                 {
-                    spdlog::error( "Failed to read section: \"{}\". Filling with zeros.", name );
+                    const auto relocation_directory = _image->data_directory( IMAGE_DIRECTORY_ENTRY_BASERELOC );
+
+                    // Check if the section corresponds to the `.reloc` section. Often times discarded sections are not readable, so we'll copy their
+                    // contents from the image backed by the disk.
+                    if ( relocation_directory->VirtualAddress == header->VirtualAddress && relocation_directory->Size == header->Misc.VirtualSize )
+                    {
+                        // Section is always mapped, so no need to check for bounds.
+                        _file.seekg( header->PointerToRawData, std::ios::beg );
+
+                        std::vector< std::uint8_t > buffer( header->SizeOfRawData );
+
+                        // Read the section from the file.
+                        if ( _file.read( reinterpret_cast< char* >( buffer.data( ) ), header->SizeOfRawData ) )
+                        {
+                            // Copy the data into the image buffer.
+                            std::copy( buffer.begin( ), buffer.end( ), _image->buffer( ).begin( ) + header->PointerToRawData );
+                            continue;
+                        }
+                    }
                 }
+
+                spdlog::error( "Failed to read section: \"{}\". Filling with zeros.", name );
 
                 // Copy zeros into the image buffer.
                 std::fill(
@@ -159,9 +197,11 @@ namespace vulkan
 
     void dumper::resolve_imports( const std::vector< std::shared_ptr< wincpp::modules::module_t > >& modules )
     {
+        spdlog::info( "Resolving import directory: \".vulkan\"" );
+
         _image->refresh( );
 
-        spdlog::debug( "Collecting all exports..." );
+        spdlog::debug( "Collecting all exported functions" );
 
         // Get the imports from the modules
         const auto& imports = get_imports( modules );
@@ -192,7 +232,7 @@ namespace vulkan
             iat_map[ iat_entry ] = import->iat_rva;
         }
 
-        spdlog::debug( "Locating cross references..." );
+        spdlog::debug( "Searching for references to the exported routines" );
 
         struct reference_t
         {
@@ -255,6 +295,47 @@ namespace vulkan
         }
     }
 
+    void dumper::resolve_runtime_functions( )
+    {
+        const auto exception_directory = _image->data_directory( IMAGE_DIRECTORY_ENTRY_EXCEPTION );
+
+        if ( !exception_directory->VirtualAddress || !exception_directory->Size )
+            return;
+
+        for ( auto rva = exception_directory->VirtualAddress; rva < exception_directory->VirtualAddress + exception_directory->Size;
+              rva += sizeof( IMAGE_RUNTIME_FUNCTION_ENTRY ) )
+        {
+            const auto& entry = *reinterpret_cast< PIMAGE_RUNTIME_FUNCTION_ENTRY >( _image->buffer( ).data( ) + _image->rva_to_offset( rva ) );
+
+            const auto unwind_offset = _image->rva_to_offset( entry.UnwindInfoAddress );
+
+            // Check if the entry is valid
+            if ( _image->rva_to_offset( entry.BeginAddress ) && _image->rva_to_offset( entry.EndAddress ) && unwind_offset )
+                continue;
+
+            struct unwind_info_t
+            {
+                std::uint8_t version : 3;
+                std::uint8_t flags : 5;
+
+                // No need to implement the rest, as we don't need it.
+            };
+
+            const auto unwind_info = *reinterpret_cast< unwind_info_t* >( _image->buffer( ).data( ) + unwind_offset );
+
+            // Check if the unwind info is valid
+            if ( unwind_info.version == 1 )
+                continue;
+
+            spdlog::warn( "Invalid runtime function entry @ 0x{:X}. Removing.", rva );
+
+            const auto offset = _image->rva_to_offset( rva );
+
+            // Remove the entry from the image;
+            std::fill( _image->buffer( ).begin( ) + offset, _image->buffer( ).begin( ) + offset + sizeof( IMAGE_RUNTIME_FUNCTION_ENTRY ), 0x00 );
+        }
+    }
+
     dumper::options::options( ) noexcept : _module_name( ), _target_decryption_factor( 1.0f ), _resolve_imports( false )
     {
     }
@@ -294,6 +375,17 @@ namespace vulkan
     dumper::options& dumper::options::resolve_imports( bool value ) noexcept
     {
         _resolve_imports = value;
+        return *this;
+    }
+
+    std::list< std::string >& dumper::options::ignore_sections( ) noexcept
+    {
+        return _ignore_sections;
+    }
+
+    dumper::options& dumper::options::ignore_sections( const std::list< std::string >& sections ) noexcept
+    {
+        _ignore_sections = sections;
         return *this;
     }
 }  // namespace vulkan

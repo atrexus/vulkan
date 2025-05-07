@@ -6,6 +6,7 @@
 #include <stop_token>
 #include <string>
 #include <vector>
+#include <fstream>
 #include <wincpp/process.hpp>
 
 #include "pe/image.hpp"
@@ -26,6 +27,7 @@ namespace vulkan
             std::string _module_name;
             float _target_decryption_factor;
             bool _resolve_imports;
+            std::list< std::string > _ignore_sections;
 
             explicit options( ) noexcept;
 
@@ -65,12 +67,23 @@ namespace vulkan
             /// Sets whether to resolve imports. This option will only work on the main module of the process.
             /// </summary>
             options& resolve_imports( bool value ) noexcept;
+
+            /// <summary>
+            /// Gets the list of sections to ignore.
+            /// </summary>
+            std::list< std::string >& ignore_sections( ) noexcept;
+
+            /// <summary>
+            /// Sets the list of sections to ignore. This is a list of section names to skip when dumping the PE.
+            /// </summary>
+            options& ignore_sections( const std::list< std::string >& sections ) noexcept;
         };
 
        private:
         std::unique_ptr< pe::image > _image = nullptr;
 
         const wincpp::modules::module_t& _module;
+        std::ifstream _file;
 
         options _options;
 
@@ -107,9 +120,8 @@ namespace vulkan
         void resolve_imports( const std::vector< std::shared_ptr< wincpp::modules::module_t > >& modules );
 
         /// <summary>
-        /// Saves the dumped PE file to a file.
+        /// Walks the exception directory and makes sure that all references are valid.
         /// </summary>
-        /// <param name="filepath">The path to save the file to.</param>
-        void save_to_file( std::string_view filepath );
+        void resolve_runtime_functions( );
     };
 }  // namespace vulkan

@@ -38,6 +38,10 @@ std::int32_t main( std::int32_t argc, char* argv[] )
         .help( "the decryption factor to use when decrypting the PE" );
     parser.add_argument( "-i", "--resolve-imports" ).flag( ).default_value< bool >( false ).help( "rebuild the import table from scratch" );
     parser.add_argument( "-w", "--wait" ).flag( ).default_value< bool >( false ).help( "wait for the process to start" );
+    parser.add_argument( "--ignore-sections" )
+        .help( "a list of section names to skip" )
+        .nargs( argparse::nargs_pattern::any )
+        .default_value( std::list< std::string >( ) );
 
     // Parse the command line arguments
     try
@@ -83,6 +87,7 @@ std::int32_t main( std::int32_t argc, char* argv[] )
 
         opts.target_decryption_factor( parser.get< float >( "decryption-factor" ) );
         opts.resolve_imports( parser.get< bool >( "resolve-imports" ) );
+        opts.ignore_sections( parser.get< std::list< std::string > >( "ignore-sections" ) );
 
         const auto& image = vulkan::dumper::dump( process, opts, stop_source.get_token( ) );
 

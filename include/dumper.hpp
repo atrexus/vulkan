@@ -28,6 +28,7 @@ namespace vulkan
             float _target_decryption_factor;
             bool _resolve_imports;
             std::list< std::string > _ignore_sections;
+            std::uintptr_t _image_base = -1;
 
             explicit options( ) noexcept;
 
@@ -77,6 +78,16 @@ namespace vulkan
             /// Sets the list of sections to ignore. This is a list of section names to skip when dumping the PE.
             /// </summary>
             options& ignore_sections( const std::list< std::string >& sections ) noexcept;
+
+            /// <summary>
+            /// Gets the new image base to use.
+            /// </summary>
+            std::uintptr_t image_base( ) const noexcept;
+
+            /// <summary>
+            /// Sets the new image base. This is the base address to use when rebasing the PE.
+            /// </summary>
+            options& image_base( std::uintptr_t base ) noexcept;
         };
 
        private:

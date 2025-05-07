@@ -221,4 +221,71 @@ namespace vulkan::pe
         return true;
     }
 
+    void image::rebase( std::uintptr_t base ) const noexcept
+    {
+        const auto relocation_directory = data_directory( IMAGE_DIRECTORY_ENTRY_BASERELOC );
+        const auto relocation_delta = base - image_base( );
+
+        if ( !relocation_directory->VirtualAddress || !relocation_directory->Size )
+            return;
+
+        auto relocation = reinterpret_cast< PIMAGE_BASE_RELOCATION >( buffer( ).data( ) + relocation_directory->VirtualAddress );
+
+        std::size_t offset = 0;
+
+        while ( relocation->VirtualAddress && offset < relocation_directory->Size )
+        {
+            const auto& count = ( relocation->SizeOfBlock - sizeof( IMAGE_BASE_RELOCATION ) ) / sizeof( std::uint16_t );
+            const auto& entries = reinterpret_cast< std::uint16_t* >( relocation + 1 );
+
+            for ( std::size_t i = 0; i < count; i++ )
+            {
+                const auto& address = buffer( ).data( ) + relocation->VirtualAddress + ( entries[ i ] & 0xFFF );
+                const auto relocation_type = entries[ i ] >> 12;
+
+                switch ( relocation_type )
+                {
+                    case IMAGE_REL_BASED_ABSOLUTE:
+                        break;
+                    case IMAGE_REL_BASED_HIGH:
+                        *reinterpret_cast< std::uint16_t* >( address ) += static_cast< std::uint16_t >( relocation_delta >> 16 );
+                        break;
+                    case IMAGE_REL_BASED_LOW:
+                        *reinterpret_cast< std::uint16_t* >( address ) += static_cast< std::uint16_t >( relocation_delta & 0xFFFF );
+                        break;
+                    case IMAGE_REL_BASED_HIGHLOW:
+                        *reinterpret_cast< std::uint32_t* >( address ) += static_cast< std::uint32_t >( relocation_delta );
+                        break;
+                    case IMAGE_REL_BASED_HIGHADJ:
+                    {
+                        if ( i + 1 >= count )
+                            break;
+
+                        const auto next = entries[ i + 1 ];
+                        i++;  
+
+                        const auto combined = ( entries[ i ] & 0x0FFF ) | ( next << 16 );
+                        auto* const target = reinterpret_cast< std::uint32_t* >( address );
+
+                        const std::uint32_t adjusted = *target;
+                        const std::uint32_t result = ( adjusted << 16 ) + static_cast< std::uint32_t >( relocation_delta );
+                        *target = result >> 16;
+                        break;
+                    }
+                    case IMAGE_REL_BASED_DIR64:
+                        *reinterpret_cast< std::uint64_t* >( address ) += relocation_delta;
+                        break;
+                    default:
+                        break;
+                }
+
+                relocation = reinterpret_cast< PIMAGE_BASE_RELOCATION >( reinterpret_cast< std::uint8_t* >( relocation ) + relocation->SizeOfBlock );
+
+                offset += relocation->SizeOfBlock;
+            }
+        }
+
+        // Update the image base.
+        _nt_headers->OptionalHeader.ImageBase = base;
+    }
 }  // namespace vulkan::pe

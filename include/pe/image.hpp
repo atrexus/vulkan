@@ -129,6 +129,12 @@ namespace vulkan::pe
         /// <param name="filepath">The path to save the image to.</param>
         /// <returns>True if the image was saved successfully, false otherwise.</returns>
         bool save_to_file( std::string_view filepath );
+
+        /// <summary>
+        /// Changes the base address of the image. It also parses the relocation directory and updates the image.
+        /// </summary>
+        /// <param name="base">The new base address.</param>
+        void rebase( std::uintptr_t base ) const noexcept;
     };
 
 }  // namespace vulkan::pe

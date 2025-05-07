@@ -75,6 +75,13 @@ namespace vulkan
 
         d->resolve_runtime_functions( );
 
+        if ( options.image_base( ) != -1 )
+        {
+            spdlog::info( "Rebasing image to 0x{:X}", options.image_base( ) );
+
+            d->_image->rebase( options.image_base( ) );
+        }
+
         // Refresh the image one last time. This will recalculate the checksum.
         d->_image->refresh( );
 
@@ -389,6 +396,16 @@ namespace vulkan
     dumper::options& dumper::options::ignore_sections( const std::list< std::string >& sections ) noexcept
     {
         _ignore_sections = sections;
+        return *this;
+    }
+    std::uintptr_t dumper::options::image_base( ) const noexcept
+    {
+        return _image_base;
+    }
+
+    dumper::options& dumper::options::image_base( std::uintptr_t base ) noexcept
+    {
+        _image_base = base;
         return *this;
     }
 }  // namespace vulkan

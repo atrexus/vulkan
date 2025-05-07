@@ -42,6 +42,9 @@ std::int32_t main( std::int32_t argc, char* argv[] )
         .help( "a list of section names to skip" )
         .nargs( argparse::nargs_pattern::any )
         .default_value( std::list< std::string >( ) );
+    parser.add_argument( "-r", "--rebase" )
+        .help( "rebases the image to a new absolute address (fixes relocations) [default: <old-base>]" )
+        .scan< 'x', std::uintptr_t >( );
 
     // Parse the command line arguments
     try
@@ -88,6 +91,9 @@ std::int32_t main( std::int32_t argc, char* argv[] )
         opts.target_decryption_factor( parser.get< float >( "decryption-factor" ) );
         opts.resolve_imports( parser.get< bool >( "resolve-imports" ) );
         opts.ignore_sections( parser.get< std::list< std::string > >( "ignore-sections" ) );
+
+        if ( const auto& rebase = parser.present< std::uintptr_t >( "-r" ) )
+            opts.image_base( rebase.value( ) );
 
         const auto& image = vulkan::dumper::dump( process, opts, stop_source.get_token( ) );
 

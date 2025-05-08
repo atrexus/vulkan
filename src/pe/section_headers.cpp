@@ -35,6 +35,44 @@ namespace vulkan::pe
             reinterpret_cast< std::uint8_t* >( &header ),
             reinterpret_cast< std::uint8_t* >( &header ) + sizeof( IMAGE_SECTION_HEADER ),
             reinterpret_cast< std::uint8_t* >( last ) );
+
+        // Update the number of sections in the NT headers.
+        _nt_headers->FileHeader.NumberOfSections += 1;
+    }
+
+    void section_headers::remove( const char* name ) const noexcept
+    {
+        const auto num_sections = count( );
+
+        for ( std::uint16_t i = 0; i < num_sections; ++i )
+        {
+            auto section = at( i );
+
+            if ( std::strncmp( reinterpret_cast< const char* >( section->Name ), name, IMAGE_SIZEOF_SHORT_NAME ) == 0 )
+            {
+                remove( i );
+                break;
+            }
+        }
+    }
+
+    void section_headers::remove( const std::uint16_t idx ) const noexcept
+    {
+        // Shift all later section headers one slot up to overwrite this one.
+        for ( std::uint16_t j = idx + 1; j < count( ); ++j )
+        {
+            auto src = at( j );
+            auto dst = at( j - 1 );
+
+            std::memcpy( dst, src, sizeof( IMAGE_SECTION_HEADER ) );
+        }
+
+        // Zero out the now-redundant last section header.
+        auto last = at( count( ) - 1 );
+        std::memset( last, 0, sizeof( IMAGE_SECTION_HEADER ) );
+
+        // Update section count.
+        _nt_headers->FileHeader.NumberOfSections -= 1;
     }
 
     PIMAGE_SECTION_HEADER section_headers::find( const char* name ) const noexcept

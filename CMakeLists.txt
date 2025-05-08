@@ -41,7 +41,6 @@ FetchContent_Declare (
 )
 FetchContent_MakeAvailable (argparse)
 
-
 # Set the header files.
 set (HDR
 	"include/dumper.hpp"

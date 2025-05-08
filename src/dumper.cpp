@@ -238,6 +238,8 @@ namespace vulkan
             _image->import_directory( )->add( imp->module( )->name( ), imp->name( ), address );
         }
 
+        spdlog::debug( "Recompiling the import directory" );
+
         _image->import_directory( )->recompile( _image.get( ), ".vulkan" );
 
         // Refresh the image.
@@ -330,7 +332,12 @@ namespace vulkan
         for ( auto rva = exception_directory->VirtualAddress; rva < exception_directory->VirtualAddress + exception_directory->Size;
               rva += sizeof( IMAGE_RUNTIME_FUNCTION_ENTRY ) )
         {
-            const auto& entry = *reinterpret_cast< PIMAGE_RUNTIME_FUNCTION_ENTRY >( _image->buffer( ).data( ) + _image->rva_to_offset( rva ) );
+            const auto offset = _image->rva_to_offset( rva );
+
+            if ( !offset )
+                continue;
+
+            const auto& entry = *reinterpret_cast< PIMAGE_RUNTIME_FUNCTION_ENTRY >( _image->buffer( ).data( ) + offset );
 
             const auto unwind_offset = _image->rva_to_offset( entry.UnwindInfoAddress );
 
@@ -353,8 +360,6 @@ namespace vulkan
                 continue;
 
             spdlog::warn( "Invalid runtime function entry @ 0x{:X}. Removing.", rva );
-
-            const auto offset = _image->rva_to_offset( rva );
 
             // Remove the entry from the image;
             std::fill( _image->buffer( ).begin( ) + offset, _image->buffer( ).begin( ) + offset + sizeof( IMAGE_RUNTIME_FUNCTION_ENTRY ), 0x00 );

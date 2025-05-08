@@ -245,8 +245,7 @@ namespace vulkan::pe
 
                 switch ( relocation_type )
                 {
-                    case IMAGE_REL_BASED_ABSOLUTE:
-                        break;
+                    case IMAGE_REL_BASED_ABSOLUTE: break;
                     case IMAGE_REL_BASED_HIGH:
                         *reinterpret_cast< std::uint16_t* >( address ) += static_cast< std::uint16_t >( relocation_delta >> 16 );
                         break;
@@ -262,7 +261,7 @@ namespace vulkan::pe
                             break;
 
                         const auto next = entries[ i + 1 ];
-                        i++;  
+                        i++;
 
                         const auto combined = ( entries[ i ] & 0x0FFF ) | ( next << 16 );
                         auto* const target = reinterpret_cast< std::uint32_t* >( address );
@@ -272,11 +271,8 @@ namespace vulkan::pe
                         *target = result >> 16;
                         break;
                     }
-                    case IMAGE_REL_BASED_DIR64:
-                        *reinterpret_cast< std::uint64_t* >( address ) += relocation_delta;
-                        break;
-                    default:
-                        break;
+                    case IMAGE_REL_BASED_DIR64: *reinterpret_cast< std::uint64_t* >( address ) += relocation_delta; break;
+                    default: break;
                 }
 
                 relocation = reinterpret_cast< PIMAGE_BASE_RELOCATION >( reinterpret_cast< std::uint8_t* >( relocation ) + relocation->SizeOfBlock );

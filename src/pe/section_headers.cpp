@@ -35,9 +35,6 @@ namespace vulkan::pe
             reinterpret_cast< std::uint8_t* >( &header ),
             reinterpret_cast< std::uint8_t* >( &header ) + sizeof( IMAGE_SECTION_HEADER ),
             reinterpret_cast< std::uint8_t* >( last ) );
-
-        // Update the number of sections in the NT headers.
-        _nt_headers->FileHeader.NumberOfSections += 1;
     }
 
     void section_headers::remove( const char* name ) const noexcept

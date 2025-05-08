@@ -45,6 +45,7 @@ std::int32_t main( std::int32_t argc, char* argv[] )
     parser.add_argument( "-r", "--rebase" )
         .help( "rebases the image to a new absolute address (fixes relocations) [default: <old-base>]" )
         .scan< 'x', std::uintptr_t >( );
+    parser.add_argument( "--minidump" ).help( "the path of the minidump file to create" ).default_value< std::string >( "" );
 
     // Parse the command line arguments
     try
@@ -94,6 +95,8 @@ std::int32_t main( std::int32_t argc, char* argv[] )
 
         if ( const auto& rebase = parser.present< std::uintptr_t >( "-r" ) )
             opts.image_base( rebase.value( ) );
+
+        opts.minidump_path( parser.get< std::string >( "minidump" ) );
 
         const auto& image = vulkan::dumper::dump( process, opts, stop_source.get_token( ) );
 

@@ -1,12 +1,12 @@
 #pragma once
 
 #include <atomic>
+#include <fstream>
 #include <map>
 #include <memory>
 #include <stop_token>
 #include <string>
 #include <vector>
-#include <fstream>
 #include <wincpp/process.hpp>
 
 #include "pe/image.hpp"
@@ -29,6 +29,7 @@ namespace vulkan
             bool _resolve_imports;
             std::list< std::string > _ignore_sections;
             std::uintptr_t _image_base = -1;
+            std::string _minidump_path;
 
             explicit options( ) noexcept;
 
@@ -88,6 +89,16 @@ namespace vulkan
             /// Sets the new image base. This is the base address to use when rebasing the PE.
             /// </summary>
             options& image_base( std::uintptr_t base ) noexcept;
+
+            /// <summary>
+            /// Gets the path of the minidump file to create.
+            /// </summary>
+            std::string_view minidump_path( ) const noexcept;
+
+            /// <summary>
+            /// This is the path of the minidump file to create. This is used to create a minidump of the process.
+            /// </summary>
+            options& minidump_path( std::string_view path ) noexcept;
         };
 
        private:
@@ -134,5 +145,12 @@ namespace vulkan
         /// Walks the exception directory and makes sure that all references are valid.
         /// </summary>
         void resolve_runtime_functions( );
+
+        /// <summary>
+        /// Creates and saves a minidump of the process.
+        /// </summary>
+        /// <param name="process">The process to create a minidump of.</param>
+        /// <param name="path">The path to save the minidump to.</param>
+        void save_minidump( const std::unique_ptr< wincpp::process_t >& process, const std::string_view path ) const;
     };
 }  // namespace vulkan

@@ -7,6 +7,13 @@
 #include <unordered_map>
 #include <wincpp/patterns/scanner.hpp>
 
+// clang-format off
+
+#include <DbgHelp.h>
+#pragma comment( lib, "Dbghelp.lib" )
+
+// clang-format on
+
 #undef max
 
 namespace vulkan
@@ -80,6 +87,14 @@ namespace vulkan
             spdlog::info( "Rebasing image to 0x{:X}", options.image_base( ) );
 
             d->_image->rebase( options.image_base( ) );
+        }
+
+        if ( !options.minidump_path( ).empty( ) )
+        {
+            spdlog::info( "Creating minidump at \"{}\"", options.minidump_path( ) );
+
+            // Create a minidump of the process.
+            d->save_minidump( process, options.minidump_path( ) );
         }
 
         // Refresh the image one last time. This will recalculate the checksum.
@@ -346,6 +361,21 @@ namespace vulkan
         }
     }
 
+    void dumper::save_minidump( const std::unique_ptr< wincpp::process_t >& process, const std::string_view path ) const
+    {
+        const auto& handle =
+            wincpp::core::handle_t::create( CreateFileA( path.data( ), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr ) );
+
+        if ( handle->native == INVALID_HANDLE_VALUE )
+            throw wincpp::core::error::from_win32( GetLastError( ) );
+
+        const auto minidump_type = static_cast< MINIDUMP_TYPE >(
+            MiniDumpWithFullMemoryInfo | MiniDumpWithHandleData | MiniDumpWithUnloadedModules | MiniDumpWithThreadInfo | MiniDumpWithModuleHeaders );
+
+        if ( !MiniDumpWriteDump( process->handle->native, process->id( ), handle->native, minidump_type, nullptr, nullptr, nullptr ) )
+            throw wincpp::core::error::from_win32( GetLastError( ) );
+    }
+
     dumper::options::options( ) noexcept : _module_name( ), _target_decryption_factor( 1.0f ), _resolve_imports( false )
     {
     }
@@ -406,6 +436,17 @@ namespace vulkan
     dumper::options& dumper::options::image_base( std::uintptr_t base ) noexcept
     {
         _image_base = base;
+        return *this;
+    }
+
+    std::string_view dumper::options::minidump_path( ) const noexcept
+    {
+        return _minidump_path;
+    }
+
+    dumper::options& dumper::options::minidump_path( std::string_view path ) noexcept
+    {
+        _minidump_path = std::string( path );
         return *this;
     }
 }  // namespace vulkan

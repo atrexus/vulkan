@@ -25,7 +25,23 @@ namespace vulkan
     {
         spdlog::debug( "Module: \"{}\" @ 0x{:X} - {} bytes", _module.name( ), _module.address( ), _module.size( ) );
 
-        _image.reset( new pe::image( _module ) );
+        _image = pe::image::create( _module );
+
+        // Create the file only if we're rebasing the image. This is because we may reference the `.reloc` section
+        // when rebasing the image. If we don't, we can just use the original file.
+        if ( _file && options.image_base( ) != -1 )
+        {
+            _file.seekg( 0, std::ios::end );
+
+            const auto file_size = _file.tellg( );
+
+            _file.seekg( 0, std::ios::beg );
+
+            std::vector< std::uint8_t > buffer( file_size );
+
+            if ( _file.read( reinterpret_cast< char* >( buffer.data( ) ), file_size ) )
+                _physical_image = std::make_unique< pe::image >( buffer, false );
+        }
     }
 
     std::list< std::pair< std::uintptr_t, std::shared_ptr< wincpp::modules::module_t::export_t > > > dumper::get_imports(
@@ -184,25 +200,28 @@ namespace vulkan
                     continue;
                 }
 
-                if ( _file )
+                if ( _file && _physical_image )
                 {
-                    const auto relocation_directory = _image->data_directory( IMAGE_DIRECTORY_ENTRY_BASERELOC );
+                    const auto relocation_directory = _physical_image->data_directory( IMAGE_DIRECTORY_ENTRY_BASERELOC );
 
                     // Check if the section corresponds to the `.reloc` section. Often times discarded sections are not readable, so we'll copy their
                     // contents from the image backed by the disk.
                     if ( relocation_directory->VirtualAddress == header->VirtualAddress && relocation_directory->Size == header->Misc.VirtualSize )
                     {
-                        // Section is always mapped, so no need to check for bounds.
-                        _file.seekg( header->PointerToRawData, std::ios::beg );
-
-                        std::vector< std::uint8_t > buffer( header->SizeOfRawData );
-
-                        // Read the section from the file.
-                        if ( _file.read( reinterpret_cast< char* >( buffer.data( ) ), header->SizeOfRawData ) )
+                        if ( const auto offset = _physical_image->rva_to_offset( relocation_directory->VirtualAddress ) )
                         {
-                            // Copy the data into the image buffer.
-                            std::copy( buffer.begin( ), buffer.end( ), _image->buffer( ).begin( ) + header->PointerToRawData );
-                            continue;
+                            // Section is always mapped, so no need to check for bounds.
+                            _file.seekg( offset, std::ios::beg );
+
+                            std::vector< std::uint8_t > buffer( relocation_directory->Size );
+
+                            // Read the section from the file.
+                            if ( _file.read( reinterpret_cast< char* >( buffer.data( ) ), relocation_directory->Size ) )
+                            {
+                                // Copy the data into the image buffer.
+                                std::copy( buffer.begin( ), buffer.end( ), _image->buffer( ).begin( ) + header->PointerToRawData );
+                                continue;
+                            }
                         }
                     }
                 }

@@ -31,10 +31,17 @@ namespace vulkan::pe
 
        public:
         /// <summary>
+        /// Creates a new image from a buffer.
+        /// </summary>
+        /// <param name="buffer">The buffer to use.</param>
+        /// <param name="mapped">Whether the buffer is mapped.</param>
+        explicit image( const std::vector< std::uint8_t >& buffer, bool mapped = true );
+
+        /// <summary>
         /// Creates a new image from a loaded module.
         /// </summary>
         /// <param name="module">The module.</param>
-        explicit image( const wincpp::modules::module_t& module );
+        static std::unique_ptr< image > create( const wincpp::modules::module_t& module );
 
         /// <summary>
         /// Returns a reference to the internal buffer.

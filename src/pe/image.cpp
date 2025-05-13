@@ -28,20 +28,37 @@ namespace vulkan::pe
         return ~sum;
     }
 
-    image::image( const wincpp::modules::module_t& module )
+    image::image( const std::vector< std::uint8_t >& buffer, bool mapped ) : _buffer( buffer )
     {
-        _buffer.resize( module.size( ) );
+        // Create the import directory.
+        _import_directory = std::unique_ptr< pe::import_directory >( new pe::import_directory( ) );
+
+        if ( _is_valid = refresh( ) && mapped )
+        {
+            auto& headers = section_headers( );
+
+            // Because we're mapping the image, we need to set the raw data to the virtual address.
+            for ( std::uint16_t i = 0; i < headers->count( ); ++i )
+            {
+                const auto section = headers->at( i );
+                section->PointerToRawData = section->VirtualAddress;
+                section->SizeOfRawData = section->Misc.VirtualSize;
+            }
+        }
+    }
+
+    std::unique_ptr< image > image::create( const wincpp::modules::module_t& module )
+    {
+        std::vector< std::uint8_t > buffer;
+        buffer.resize( module.size( ) );
 
         // The header is the first region in the module.
         const auto& header = *module.regions( ).begin( );
         const auto header_size = header.size( );
 
-        header.read( _buffer.data( ) );
+        header.read( buffer.data( ) );
 
-        // Create the import directory.
-        _import_directory = std::unique_ptr< pe::import_directory >( new pe::import_directory( ) );
-
-        _is_valid = refresh( );
+        return std::make_unique< image >( buffer, true );
     }
 
     std::vector< std::uint8_t >& image::buffer( ) const noexcept

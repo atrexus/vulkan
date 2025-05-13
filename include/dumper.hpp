@@ -103,6 +103,7 @@ namespace vulkan
 
        private:
         std::unique_ptr< pe::image > _image = nullptr;
+        std::unique_ptr< pe::image > _physical_image = nullptr;
 
         const wincpp::modules::module_t& _module;
         std::ifstream _file;
